@@ -66,6 +66,35 @@ check(runScenario({ name: '30fps slow PC vs 60Hz', latencyMs: 30, jitterMs: 10, 
 check(runScenario({ name: 'different input delays (3 vs 7)', latencyMs: 50, jitterMs: 15, delayA: 3, delayB: 7, hzA: 60, hzB: 75, seconds: 20 }));
 check(runScenario({ name: 'injected desync is detected', latencyMs: 30, jitterMs: 5, delayA: 4, delayB: 4, hzA: 60, hzB: 60, seconds: 10, breakAt: 200 }), true);
 
+// changing the input delay in the middle of a match must not desync (raise, then lower, on both sides, independently)
+{
+  const rng = netMulberry32(99); let now = 0;
+  const q = { toA: [], toB: [] };
+  const mk = (queue) => { let last = 0; return (m) => { const t = Math.max(last, now + 40 + rng() * 15); last = t; queue.push({ t, m: JSON.parse(JSON.stringify(m)) }); }; };
+  const A = { ls: new Lockstep(0, 4, mk(q.toB)), st: 0, f: 0, ai: netMulberry32(5), rg: netMulberry32(7) };
+  const B = { ls: new Lockstep(1, 4, mk(q.toA)), st: 0, f: 0, ai: netMulberry32(6), rg: netMulberry32(7) };
+  const log = { A: [], B: [] };
+  const samp = (M) => () => (M.ai() < 0.4 ? 1 : 0) | (M.ai() < 0.2 ? 32 : 0) | (M.ai() < 0.1 ? 256 : 0) | (M.ai() < 0.3 ? 2 : 0);
+  const sa = samp(A), sb = samp(B);
+  for (now = 0; now < 20000; now++) {
+    while (q.toA.length && q.toA[0].t <= now) A.ls.receive(q.toA.shift().m);
+    while (q.toB.length && q.toB[0].t <= now) B.ls.receive(q.toB.shift().m);
+    if (now % 17 !== 0) continue;                       // ~60 fps
+    if (now === 5000) A.ls.setDelay(9);                 // A raises
+    if (now === 8000) B.ls.setDelay(7);                 // B raises
+    if (now === 12000) A.ls.setDelay(3);                // A lowers a lot
+    if (now === 15000) B.ls.setDelay(2);                // B lowers a lot
+    for (const [M, s, k] of [[A, sa, 'A'], [B, sb, 'B']]) {
+      const r = M.ls.advance(s);
+      if (r) { M.st = (Math.imul(M.st ^ r[0], 2654435761) + r[1] * 31 + Math.floor(M.rg() * 1000)) >>> 0; log[k].push(M.st); }
+    }
+  }
+  const n = Math.min(log.A.length, log.B.length);
+  assert.ok(n > 800, 'game advanced ' + n);
+  for (let i = 0; i < n; i++) assert.strictEqual(log.A[i], log.B[i], 'states differ at frame ' + i);
+  console.log('ok  delay changed mid-match (4->9, 4->7, ->3, ->2): ' + n + ' frames identical on both sides');
+}
+
 // input encoding round trip
 for (const attack of [null, 'light', 'heavy']) {
   const i = { left: true, right: false, up: true, down: false, downHeld: true, jump: true, attack, throwWeapon: true, dodge: false };

@@ -75,6 +75,18 @@ const mk = () => { const n = Object.create(NetBase); n.pending = []; n.handlers 
   assert.ok(netDecodeInput(last[0]).left && netDecodeInput(last[1]).attack === 'light');
   console.log('ok  ' + n + ' frames identical on both sides; P1=left, P2=right+light');
 
+  // stale packets from a finished match are ignored; repick reaches the other side
+  G.endMatch(); H.endMatch();
+  G.handlers.onRepick = () => { G.gotRepick = true; };
+  H.requestRepick(); await wait(10);
+  assert.ok(G.repickFlag && G.gotRepick && G.remoteSel === null, 'guest got the repick request');
+  const oldSeed = H.seed; H.announceStart({ p1: 'kyaw', p2: 'thiri', map: 'pagoda' }); await wait(10);
+  assert.notStrictEqual(G.seed, oldSeed);
+  G.pending = []; G._onData({ t: 'i', f: 5, m: 1, k: oldSeed });
+  assert.strictEqual(G.pending.length, 0, 'old-match packet dropped');
+  G.endMatch(); G.beginMatch(4);
+  console.log('ok  repick delivered; old-match packets dropped; new match starts clean');
+
   // third player is refused
   const X = mk(); X.join(H.code); await wait(30);
   assert.strictEqual(X.state, 'closed'); assert.ok(/two players/.test(X.error), X.error);
