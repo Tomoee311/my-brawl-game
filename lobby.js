@@ -8,6 +8,7 @@ class LobbyScene extends Phaser.Scene {
   }
 
   create() {
+    if (typeof Music !== 'undefined') Music.play();
     if (window.setHelpVisible) window.setHelpVisible(false);
     this.phase = 'main';                 // 'main' | 'bot'
     this.cursor = 0;

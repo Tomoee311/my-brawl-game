@@ -639,6 +639,7 @@ function updateKoEffects() {
 }
 
 function create() {
+  if (typeof Music !== 'undefined') Music.stop();   // menu music ends when the match starts
   // ---------- Every time we come back/re-enter from the Menu, start from a fresh state ----------
   CURRENT_MAP = MAPS[SELECTION.map] ? SELECTION.map : 'pagoda';
   acc = 0; hitStopFrames = 0;

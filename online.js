@@ -11,6 +11,7 @@ class OnlineScene extends Phaser.Scene {
   }
 
   create() {
+    if (typeof Music !== 'undefined') Music.play();
     if (window.setHelpVisible) window.setHelpVisible(false);
     this.input.mouse.disableContextMenu();
     this.leaving = false;

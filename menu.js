@@ -39,6 +39,7 @@ class MenuScene extends Phaser.Scene {
   }
 
   create() {
+    if (typeof Music !== 'undefined') Music.play();
     if (window.setHelpVisible) window.setHelpVisible(false);
     if (typeof setupCharacters === 'function') setupCharacters(this);   // register the idle animations (${id}_idle)
     this.charIds = Object.keys(CHARACTERS);
