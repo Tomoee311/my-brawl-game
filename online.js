@@ -6,25 +6,31 @@ class OnlineScene extends Phaser.Scene {
     super('Online');
   }
 
+  init(data) {
+    this.resume = !!(data && data.resume);   // true = coming back from a finished match with the same opponent (connection stays open)
+  }
+
   create() {
     if (window.setHelpVisible) window.setHelpVisible(false);
     this.input.mouse.disableContextMenu();
     this.leaving = false;
-    this.phase = 'menu';            // menu | hosting | joinInput | joining | select | error
+    this.phase = this.resume ? 'select' : 'menu';   // menu | hosting | joinInput | joining | select | error
     this.cursor = 0;
     this.codeInput = '';
     this.errorMsg = '';
     this.flash = '';
     this.charIds = Object.keys(CHARACTERS);
     this.mapIds = Object.keys(MAPS).filter((id) => MAPS[id].layers && MAPS[id].layers.length);
-    this.myChar = Math.max(0, this.charIds.indexOf(SELECTION.p1));
+    const prev = Net.myPick || {};   // what I picked last time (kept for a rematch with new heroes)
+    this.myChar = Math.max(0, this.charIds.indexOf(this.resume && prev.char ? prev.char : SELECTION.p1));
     this.myReady = false;
-    this.mapIdx = Math.max(0, ['random', ...this.mapIds].indexOf(SELECTION.map));   // 0 = random
+    this.mapIdx = Math.max(0, ['random', ...this.mapIds].indexOf(this.resume && prev.map ? prev.map : 'random'));   // 0 = random
     this.starting = false;
     this.pingText = null;
 
-    Net.reset();
+    if (this.resume) Net.endMatch(); else Net.reset();
     Net.handlers = {
+      onRepick: () => { this.myReady = false; this.sendSel(); this.render(); },   // opponent is (also) back at the select screen: show them my pick again
       onState: () => this.onNetState(),
       onSelect: () => { this.render(); this.checkStart(); },   // host: start as soon as the guest's READY arrives
       onOpen: () => this.render(),
@@ -55,12 +61,13 @@ class OnlineScene extends Phaser.Scene {
 
     // invite link: ?room=ABCD joins straight away
     const room = new URLSearchParams(window.location.search).get('room');
-    if (room && /^[A-Za-z]{4}$/.test(room)) { this.codeInput = room.toUpperCase(); this.joinNow(); } else this.render();
+    if (this.resume) { this.render(); this.onNetState(); this.sendSel(); }
+    else if (room && /^[A-Za-z]{4}$/.test(room)) { this.codeInput = room.toUpperCase(); this.joinNow(); } else this.render();
   }
 
   update(time, delta) { UI.tickEmbers(this, delta); }
 
-  pingLabel() { return 'ping ' + (Net.rtt ? Math.round(Net.rtt) + ' ms' : '…'); }
+  pingLabel() { return 'ping ' + (Net.rtt ? Math.round(Net.rtt) + ' ms' : '…') + (Net.route ? '  ·  ' + (Net.route === 'RELAY' ? 'relay server (slower)' : 'direct') : ''); }
 
   // ------------------------------------------------------------------ network events
   onNetState() {
@@ -87,6 +94,7 @@ class OnlineScene extends Phaser.Scene {
   }
 
   sendSel() {
+    Net.myPick = { char: this.charIds[this.myChar], map: this.mapIdOf() };
     Net.sendMsg({ t: 'sel', char: this.charIds[this.myChar], ready: this.myReady, map: this.mapIdOf() });
   }
 
@@ -97,8 +105,10 @@ class OnlineScene extends Phaser.Scene {
     const r = Net.remoteSel;
     if (!(this.myReady && r && r.ready && r.char)) return;
     this.starting = true;
-    let map = this.mapIdOf();
-    if (map === 'random') map = this.mapIds[Math.floor(Math.random() * this.mapIds.length)];
+    // Both players pick a stage. 'random' becomes a real stage first; if the two picks differ, a coin flip decides.
+    const concrete = (m) => (m && m !== 'random' && MAPS[m]) ? m : this.mapIds[Math.floor(Math.random() * this.mapIds.length)];
+    const mine = concrete(this.mapIdOf()), theirs = concrete(r.map);
+    const map = mine === theirs ? mine : (Math.random() < 0.5 ? mine : theirs);
     const msg = Net.announceStart({ p1: this.charIds[this.myChar], p2: r.char, map });
     this.time.delayedCall(350, () => this.beginGame(msg, true));
   }
@@ -150,7 +160,7 @@ class OnlineScene extends Phaser.Scene {
     } else if (this.phase === 'select') {
       if (left) { this.myChar = (this.myChar + this.charIds.length - 1) % this.charIds.length; this.changedSel(); stop(); }
       else if (right) { this.myChar = (this.myChar + 1) % this.charIds.length; this.changedSel(); stop(); }
-      else if (Net.role === 'host' && (up || down)) {
+      else if (up || down) {
         const n = this.mapIds.length + 1;
         this.mapIdx = (this.mapIdx + (down ? 1 : n - 1)) % n; this.changedSel(); stop();
       }
@@ -203,7 +213,7 @@ class OnlineScene extends Phaser.Scene {
     if (z.kind === 'menu') { this.cursor = z.i; this.chooseMenu(z.i); }
     else if (z.kind === 'card') { if (this.myChar !== z.i) { this.myChar = z.i; this.changedSel(); } else this.toggleReady(); }
     else if (z.kind === 'ready') this.toggleReady();
-    else if (z.kind === 'map' && Net.role === 'host') { this.mapIdx = (this.mapIdx + 1) % (this.mapIds.length + 1); this.changedSel(); }
+    else if (z.kind === 'map') { this.mapIdx = (this.mapIdx + 1) % (this.mapIds.length + 1); this.changedSel(); }
     else if (z.kind === 'copy') this.copyLink();
     else if (z.kind === 'back') { if (this.phase === 'menu') this.leave(); else if (this.phase === 'select') this.leave(); else { Net.reset(); this.phase = 'menu'; this.render(); } }
   }
@@ -325,41 +335,65 @@ class OnlineScene extends Phaser.Scene {
       this.zones.push({ kind: 'card', i, x, y, w: size, h: size });
     });
 
-    // player panels + stage in the middle
-    const sw = Math.min(w * 0.22, 230 * S), gapP = 14 * S, py = h * 0.665, ph = 134 * S;
+    // player panels (hero + stats) and the stage card in the middle
+    const sw = Math.min(w * 0.22, 230 * S), gapP = 14 * S, ph = 172 * S, py = h * 0.655;
     const pw = Math.min((w * 0.94 - sw - 2 * gapP) / 2, 360 * S);
     const lx = w / 2 - sw / 2 - gapP - pw / 2, rx = w / 2 + sw / 2 + gapP + pw / 2;
+    const fz = Math.max(S, 0.8);
     const panel = (x, label, charId, ready, col, isYou) => {
       UI.glass(this, x, py, pw, ph, { accent: col, selected: isYou, bar: true });
-      UI.text(this, x - pw / 2 + 34, py - ph * 0.30, label, 12 * Math.max(S, 0.85), isYou ? UI.css(col) : UI.c.muted, true).setOrigin(0, 0.5);
-      UI.text(this, x - pw / 2 + 34, py + ph * 0.0, charId ? CHARACTERS[charId].name.toUpperCase() : 'CHOOSING…', 26 * Math.max(S, 0.8), charId ? '#ffffff' : UI.c.dim, true).setOrigin(0, 0.5).setStroke('#0a1230', 4);
-      const cw = 112 * Math.max(S, 0.85), cy = py + ph * 0.29;
-      this.add.graphics().setDepth(7).fillStyle(ready ? UI.c.mint : 0x26335f, ready ? 1 : 0.9).fillRoundedRect(x - pw / 2 + 34, cy - 13, cw, 26, 13);
-      if (charId && this.textures.exists(CHARACTERS[charId].sheetKey)) {   // portrait
-        const im = this.add.image(x + pw / 2 - ph * 0.5, py + ph * 0.02, CHARACTERS[charId].sheetKey, 0).setDepth(6);
-        im.setCrop(46, 32, 68, 66);
-        const sc = (ph * 0.8) / 68; im.setScale(sc); im.y = py + ph * 0.02 - sc;
+      const x0 = x - pw / 2 + 34, c = charId && CHARACTERS[charId];
+      UI.text(this, x0, py - ph * 0.37, label, 12 * Math.max(S, 0.85), isYou ? UI.css(col) : UI.c.muted, true).setOrigin(0, 0.5);
+      UI.text(this, x0, py - ph * 0.235, c ? c.name.toUpperCase() : 'CHOOSING…', 25 * fz, c ? '#ffffff' : UI.c.dim, true).setOrigin(0, 0.5).setStroke('#0a1230', 4);
+      // stat bars (same ones the offline hero screen shows)
+      if (c && c.stats && typeof MENU_STAT_RANGES !== 'undefined') {
+        const g = this.add.graphics().setDepth(7);
+        const barW = Math.min(pw * 0.34, 128 * S), labW = 54 * fz;
+        Object.keys(MENU_STAT_RANGES).forEach((name, k) => {
+          const [key, lo, hi] = MENU_STAT_RANGES[name];
+          const v = Phaser.Math.Clamp(((c.stats[key] != null ? c.stats[key] : lo) - lo) / (hi - lo), 0.05, 1);
+          const ry = py - ph * 0.09 + k * ph * 0.105;
+          UI.text(this, x0, ry, name, 10.5 * fz, '#8aa4d8', false).setOrigin(0, 0.5);
+          g.fillStyle(0x16224f, 1).fillRoundedRect(x0 + labW, ry - 4, barW, 8, 4);
+          g.fillStyle(col, 1).fillRoundedRect(x0 + labW, ry - 4, barW * v, 8, 4);
+        });
       }
-      UI.text(this, x - pw / 2 + 34 + cw / 2, cy, ready ? '✔ READY' : 'NOT READY', 11 * Math.max(S, 0.85), ready ? '#06210f' : UI.c.muted, true).setDepth(9);
+      const cw = 112 * Math.max(S, 0.85), cy = py + ph * 0.385;
+      this.add.graphics().setDepth(7).fillStyle(ready ? UI.c.mint : 0x26335f, ready ? 1 : 0.9).fillRoundedRect(x0, cy - 13, cw, 26, 13);
+      UI.text(this, x0 + cw / 2, cy, ready ? '✔ READY' : 'NOT READY', 11 * Math.max(S, 0.85), ready ? '#06210f' : UI.c.muted, true).setDepth(9);
+      if (c && this.textures.exists(c.sheetKey)) {   // portrait (top-right)
+        const im = this.add.image(x + pw / 2 - ph * 0.36, py - ph * 0.05, c.sheetKey, 0).setDepth(6);
+        im.setCrop(46, 32, 68, 66);
+        const sc = (ph * 0.62) / 68; im.setScale(sc); im.y = py - ph * 0.05 - sc;
+        const wp = (c.weaponPool || []).slice(0, 2).map((t) => t.toUpperCase()).join(' · ');
+        if (wp) UI.text(this, x + pw / 2 - ph * 0.36, py + ph * 0.30, wp, 10 * fz, '#9fc0ff', true);
+      }
     };
     const you = 'YOU · ' + (host ? 'P1' : 'P2'), them = 'OPPONENT · ' + (host ? 'P2' : 'P1');
     panel(host ? lx : rx, you, this.charIds[this.myChar], this.myReady, myCol, true);
     panel(host ? rx : lx, them, opp && opp.char, !!(opp && opp.ready), opCol, false);
 
-    // stage card
-    const mapId = host ? this.mapIdOf() : (opp && opp.map) || 'random';
+    // stage card: BOTH players pick a stage; same pick = that stage, different picks = coin flip
     UI.glass(this, w / 2, py, sw, ph, { accent: UI.c.gold, selected: false });
-    UI.text(this, w / 2, py - ph * 0.39, 'STAGE', 11, UI.c.dim, true);
-    const ih = ph * 0.46, iw = Math.min(ih * 16 / 9, sw - 24), iy = py - ph * 0.04;
-    if (mapId !== 'random' && this.textures.exists('thumb_' + mapId)) {
-      this.add.image(w / 2, iy, 'thumb_' + mapId).setDisplaySize(iw, ih).setDepth(6);
-      this.add.graphics().setDepth(7).lineStyle(1.5, UI.c.line, 1).strokeRoundedRect(w / 2 - iw / 2, iy - ih / 2, iw, ih, 6);
-    } else {
-      UI.text(this, w / 2, iy, '?', ih * 0.7, UI.c.dim, true);
-    }
-    const mapName = mapId === 'random' ? 'RANDOM' : (MAPS[mapId] ? MAPS[mapId].name.toUpperCase() : mapId);
-    UI.text(this, w / 2, py + ph * 0.37, mapName, 10.5, '#ffffff', true, { wordWrap: { width: sw - 16 } });
-    if (host) this.zones.push({ kind: 'map', x: w / 2, y: py, w: sw, h: ph });
+    UI.text(this, w / 2, py - ph * 0.44, 'STAGE VOTE', 11, UI.c.dim, true);
+    const myMap = this.mapIdOf(), opMap = (opp && opp.map) || null;
+    const tw = (sw - 24) / 2, th = Math.min(tw * 9 / 16, ph * 0.3), ty = py - ph * 0.12;
+    const thumb = (cx, mapId, who, col) => {
+      if (mapId && mapId !== 'random' && this.textures.exists('thumb_' + mapId)) {
+        this.add.image(cx, ty, 'thumb_' + mapId).setDisplaySize(tw - 4, th).setDepth(6);
+        this.add.graphics().setDepth(7).lineStyle(2, col, 1).strokeRoundedRect(cx - (tw - 4) / 2, ty - th / 2, tw - 4, th, 5);
+      } else {
+        this.add.graphics().setDepth(6).fillStyle(0x16224f, 1).fillRoundedRect(cx - (tw - 4) / 2, ty - th / 2, tw - 4, th, 5);
+        UI.text(this, cx, ty, mapId === 'random' ? '?' : '…', th * 0.6, UI.c.dim, true);
+      }
+      UI.text(this, cx, ty - th / 2 - 9, who, 9.5 * fz, UI.css(col), true);
+      const nm = mapId === 'random' ? 'RANDOM' : (mapId && MAPS[mapId] ? MAPS[mapId].name.toUpperCase() : '—');
+      UI.text(this, cx, ty + th / 2 + 10, nm, 9.5 * fz, '#ffffff', true, { wordWrap: { width: tw } });
+    };
+    thumb(w / 2 - tw / 2 - 2, myMap, 'YOU', myCol);
+    thumb(w / 2 + tw / 2 + 2, opMap, 'OPP', opCol);
+    UI.text(this, w / 2, py + ph * 0.33, 'Same pick = that stage.\nDifferent = random one of the two.', 9.5 * fz, UI.c.dim, false, { wordWrap: { width: sw - 14 } });
+    this.zones.push({ kind: 'map', x: w / 2, y: py, w: sw, h: ph });
 
     // ready button
     const by = h * 0.865, bw = Math.min(330 * S + 40, w * 0.9), bh = 52 * S + 6;
@@ -368,6 +402,6 @@ class OnlineScene extends Phaser.Scene {
     UI.text(this, w / 2, by, this.myReady ? '✔  READY — waiting for opponent' : 'READY  (ENTER)', 17 * Math.max(S, 0.8), UI.css(col), true);
     this.zones.push({ kind: 'ready', x: w / 2, y: by, w: bw, h: bh });
     this.pingText = UI.text(this, w / 2, h - 20, this.pingLabel(), 12, UI.c.dim);
-    UI.text(this, w / 2, h - 38, host ? 'A / D  hero      ↑ / ↓  stage      ENTER  ready / cancel' : 'A / D  hero      ENTER  ready / cancel', 12, UI.c.dim);
+    UI.text(this, w / 2, h - 38, 'A / D  hero      ↑ / ↓  pick stage      ENTER  ready / cancel', 12, UI.c.dim);
   }
 }

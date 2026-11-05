@@ -116,6 +116,8 @@ let simRng = null;                     // seeded random in online mode, null (= 
 let rematchVote = [false, false];
 let rematchCount = 0;
 let netStallSince = 0;
+let netClosedAt = 0;                   // when the connection was lost (we return to the lobby a moment later)
+let netExiting = false;                // already leaving the match scene
 let escArmedUntil = 0;
 let netMsgText = null, netPingText = null;
 function rngNext() { return simRng ? simRng() : Math.random(); }
@@ -658,7 +660,7 @@ function create() {
     this.events.off(Phaser.Scenes.Events.UPDATE, pw.update, pw);
     this.events.off(Phaser.Scenes.Events.POST_UPDATE, pw.postUpdate, pw);
     simRng = netMulberry32(Net.seed);
-    rematchVote = [false, false]; rematchCount = 0; netMasks = [0, 0]; netStallSince = 0; escArmedUntil = 0;
+    rematchVote = [false, false]; rematchCount = 0; netMasks = [0, 0]; netStallSince = 0; netClosedAt = 0; netExiting = false; escArmedUntil = 0;
     Net.beginMatch();
   } else {
     simRng = null;
@@ -695,7 +697,7 @@ function create() {
         if (Net.state === 'closed' || Date.now() < escArmedUntil) leaveOnline(this); else escArmedUntil = Date.now() + 2000;   // press twice so it is not accidental
       }
     },   // Only in Bot (offline) mode ESC returns to the Lobby (not mid-match in online/friends)
-    KeyM: () => { if (match.over && !isOnline()) this.scene.start('Menu'); },
+    KeyM: () => { if (match.over) { if (isOnline()) repickOnline(this); else this.scene.start('Menu'); } },   // online: both players go back to hero + stage select
     KeyL: () => { if (match.over) { if (isOnline()) leaveOnline(this); else this.scene.start('Lobby'); } },   // back to the Lobby (only after the match)
   });
 
@@ -821,7 +823,7 @@ function create() {
   winUi = [
     this.add.rectangle(0, 0, 10, 10, 0x000000, 0.55).setDepth(20),
     this.add.text(0, 0, '', { fontFamily: HF, fontSize: '74px', fontStyle: 'bold', color: '#ffffff', stroke: '#050818', strokeThickness: 8 }).setOrigin(0.5).setDepth(21).setShadow(0, 5, '#000000', 10, true, true),
-    this.add.text(0, 0, online ? 'R  Rematch        L  Leave' : 'R  Rematch        M  Re-pick hero        L  Lobby', { fontFamily: HF, fontSize: '18px', fontStyle: '600', color: '#a9bbe8' }).setOrigin(0.5).setDepth(21),
+    this.add.text(0, 0, online ? 'R  Rematch        M  Re-pick hero        L  Leave' : 'R  Rematch        M  Re-pick hero        L  Lobby', { fontFamily: HF, fontSize: '18px', fontStyle: '600', color: '#a9bbe8' }).setOrigin(0.5).setDepth(21),
     this.add.graphics().setDepth(20.5),
   ];
   netMsgText = this.add.text(0, 0, '', { fontFamily: HF, fontSize: '28px', fontStyle: 'bold', color: '#ffffff', align: 'center', stroke: '#000000', strokeThickness: 5 }).setOrigin(0.5).setDepth(30).setVisible(false);
@@ -1060,16 +1062,26 @@ function stateHash() {
 }
 
 function leaveOnline(scene) {
-  Net.reset();
+  if (netExiting) return;
+  netExiting = true;
+  Net.reset();                        // tells the opponent we left; their game returns to the lobby by itself
   scene.scene.start('Lobby');
+}
+
+// go back to hero + stage select with the same opponent (the other side follows when the 'repick' message arrives)
+function repickOnline(scene) {
+  if (netExiting || Net.state !== 'connected') return;
+  netExiting = true;
+  Net.requestRepick();
+  scene.scene.start('Online', { resume: true });
 }
 
 function updateNetText() {
   if (!netMsgText || !netPingText) return;
   const sw = gameScene.scale.width, sh = gameScene.scale.height;
-  netPingText.setPosition(sw / 2, 6).setText(Net.state === 'connected' ? 'ONLINE  ping ' + (Net.rtt ? Math.round(Net.rtt) : '…') + ' ms  ·  input delay ' + (Net.lock ? Net.lock.delay : '?') + ' f' : '');
+  netPingText.setPosition(sw / 2, 6).setText(Net.state === 'connected' ? 'ONLINE  ping ' + (Net.rtt ? Math.round(Net.rtt) : '…') + ' ms  ·  input delay ' + (Net.lock ? Net.lock.delay : '?') + ' f' + (Net.route ? '  ·  ' + Net.route : '') : '');
   let msg = '', color = '#ffffff';
-  if (Net.state === 'closed') { msg = (Net.error || 'Opponent disconnected.') + '\n\nPress ESC to return to the lobby'; color = '#ff9c9c'; }
+  if (Net.state === 'closed') { msg = (Net.error || 'Opponent disconnected.') + '\n\nReturning to the lobby…  (ESC = now)'; color = '#ff9c9c'; }
   else if (Net.lock && Net.lock.desync) { msg = 'GAME OUT OF SYNC\n(the two games no longer match — press ESC twice and rejoin)'; color = '#ff9c9c'; }
   else if (match.over && rematchVote[Net.localIdx] && !rematchVote[1 - Net.localIdx]) msg = 'Waiting for opponent to accept rematch…';
   else if (match.over && rematchVote[1 - Net.localIdx]) { msg = 'Opponent wants a rematch — press R'; color = '#ffe27a'; }
@@ -1081,6 +1093,14 @@ function updateNetText() {
 function update(time, delta) {
   acc += Math.min(delta, 100);
   if (isOnline()) {
+    if (netExiting) return;
+    if (Net.repickFlag) {                                   // the opponent went back to hero select: follow them
+      netExiting = true; Net.endMatch(); this.scene.start('Online', { resume: true }); return;
+    }
+    if (Net.state === 'closed') {                           // opponent left / connection lost: show why, then go to the lobby
+      if (!netClosedAt) netClosedAt = Date.now();
+      else if (Date.now() - netClosedAt > 2500) { leaveOnline(this); return; }
+    }
     acc = Math.min(acc, STEP_MS * 6);
     while (acc >= STEP_MS) {
       if (Net.state === 'closed' || !Net.lock) break;

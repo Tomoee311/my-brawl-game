@@ -17,6 +17,8 @@ const NET_STEP_MS = 1000 / 60;
 // ---- button state <-> integer ----
 const NET_BIT = { left: 1, right: 2, up: 4, down: 8, downHeld: 16, jump: 32, throwWeapon: 64, dodge: 128, light: 256, heavy: 512, rematch: 1024 };
 
+const NET_HOLD_MASK = NET_BIT.left | NET_BIT.right | NET_BIT.up | NET_BIT.downHeld;   // buttons that stay down (the rest are one-shot taps)
+
 function netEncodeInput(i, rematch) {
   let m = 0;
   if (i.left) m |= NET_BIT.left;
@@ -79,6 +81,23 @@ class Lockstep {
       this.send({ t: 'i', f, m: 0 });
     }
     this.sampledTo = delay - 1;
+  }
+
+  // Change this side's input delay while the match runs (the other side needs no coordination: inputs are keyed by frame).
+  // Raising it fills the gap with the latest held buttons (one-shot presses are NOT repeated). Lowering it just pauses sampling for a few frames.
+  setDelay(d) {
+    d = Math.max(1, d | 0);
+    if (d === this.delay) return;
+    if (d > this.delay) {
+      const last = this.buf[this.localIdx].get(this.sampledTo);
+      const held = (last === undefined ? 0 : last) & NET_HOLD_MASK;
+      for (let f = this.sampledTo + 1; f <= this.frame + d; f++) {
+        this.buf[this.localIdx].set(f, held);
+        this.send({ t: 'i', f, m: held });
+      }
+      this.sampledTo = this.frame + d;
+    }
+    this.delay = d;
   }
 
   receive(msg) {
@@ -144,6 +163,10 @@ const Net = {
   remoteSel: null,       // opponent's character/map choice in the select screen
   startMsg: null,        // set when 'start' arrives (guest)
   wantRematch: false,
+  repickFlag: false,     // opponent asked to go back to hero select after a match
+  jitter: 0,             // ms, smoothed |rtt - average|
+  extra: 0,              // extra input-delay frames the opponent asked for after it kept waiting for us
+  route: '',             // 'DIRECT' | 'RELAY' once known (relay = traffic goes through a TURN server = more lag)
   pending: [],           // frames that arrived before our own Game scene started
   handlers: {},          // optional callbacks: onState, onSelect, onStart
 
@@ -170,14 +193,30 @@ const Net = {
   reset() {
     this.close();
     this.state = 'idle'; this.role = null; this.code = ''; this.error = '';
-    this.lock = null; this.rtt = 0; this.remoteSel = null; this.startMsg = null; this.wantRematch = false; this.pending = [];
+    this.lock = null; this.rtt = 0; this.jitter = 0; this.extra = 0; this.route = ''; this.repickFlag = false;
+    this.remoteSel = null; this.startMsg = null; this.wantRematch = false; this.pending = [];
+  },
+
+  // leave a finished match but keep the connection (rematch with new heroes)
+  endMatch() {
+    this.lock = null; this.pending = []; this.wantRematch = false; this.repickFlag = false; this.extra = 0;
+  },
+
+  // after a match: both players go back to the hero/stage select screen
+  requestRepick() {
+    this.remoteSel = null;
+    this.endMatch();
+    this.sendMsg({ t: 'repick' });
   },
 
   close() {
-    try { if (this.conn && this.conn.open) this.conn.send({ t: 'bye' }); } catch (e) {}
-    try { if (this.conn) this.conn.close(); } catch (e) {}
-    try { if (this.peer) this.peer.destroy(); } catch (e) {}
+    const conn = this.conn, peer = this.peer;
+    try { if (conn && conn.open) conn.send({ t: 'bye' }); } catch (e) {}
+    // give the 'bye' a moment to leave before hanging up, so the opponent learns that we left on purpose
+    const hangUp = () => { try { if (conn) conn.close(); } catch (e) {} try { if (peer) peer.destroy(); } catch (e) {} };
+    if (conn && conn.open) setTimeout(hangUp, 200); else hangUp();
     this.conn = null; this.peer = null;
+    clearTimeout(this._joinTimer);
     if (this._ping) { clearInterval(this._ping); this._ping = null; }
   },
 
@@ -247,10 +286,47 @@ const Net = {
 
   _startPing() {
     if (this._ping) clearInterval(this._ping);
+    this._ticks = 0; this._lastStalls = 0; this._calm = 0; this._slowAt = 0; this._lastSlowMsg = 0;
     this._ping = setInterval(() => {
+      this._ticks++;
       this.sendMsg({ t: 'p', ts: Date.now() });
       if (this.state === 'connected' && Date.now() - this.lastRecv > 8000) this._setState('closed', 'Connection timed out.');
-    }, 1000);
+      this._adapt();
+      if (!this.route && (this._ticks === 4 || this._ticks % 10 === 0)) this._probeRoute();
+    }, 500);
+  },
+
+  // Re-tune the input delay during a match from the measured ping + jitter, and from how often the OTHER side kept waiting for us.
+  _adapt() {
+    if (!this.lock) return;
+    const now = Date.now();
+    // we waited for the opponent's input several times in the last 0.5 s -> ask them to send further ahead
+    const st = this.lock.totalStalls;
+    if (st - this._lastStalls >= 2 && now - this._lastSlowMsg > 1000) { this.sendMsg({ t: 'slow' }); this._lastSlowMsg = now; }
+    this._lastStalls = st;
+    // the requested extra frames fade away again after 10 quiet seconds
+    if (this.extra > 0 && now - this._slowAt > 10000) { this.extra--; this._slowAt = now; }
+    const want = this.inputDelay(), cur = this.lock.delay;
+    if (want > cur) { this.lock.setDelay(want); this._calm = 0; }
+    else if (want < cur) { if (++this._calm >= 6) { this.lock.setDelay(cur - 1); this._calm = 0; } }   // lower it slowly (3 s), one frame at a time
+    else this._calm = 0;
+  },
+
+  // Is the connection direct (peer-to-peer) or going through a relay server? Relay = noticeably more lag.
+  _probeRoute() {
+    try {
+      const pc = this.conn && this.conn.peerConnection;
+      if (!pc || !pc.getStats) return;
+      pc.getStats().then((stats) => {
+        const byId = {}; let pairId = null, pair = null;
+        stats.forEach((r) => { byId[r.id] = r; if (r.type === 'transport' && r.selectedCandidatePairId) pairId = r.selectedCandidatePairId; });
+        if (pairId) pair = byId[pairId];
+        if (!pair) stats.forEach((r) => { if (!pair && r.type === 'candidate-pair' && (r.selected || (r.nominated && r.state === 'succeeded'))) pair = r; });
+        if (!pair) return;
+        const l = byId[pair.localCandidateId], r = byId[pair.remoteCandidateId];
+        this.route = ((l && l.candidateType === 'relay') || (r && r.candidateType === 'relay')) ? 'RELAY' : 'DIRECT';
+      }).catch(() => {});
+    } catch (e) {}
   },
 
   sendMsg(msg) {
@@ -261,9 +337,19 @@ const Net = {
     if (!msg || typeof msg !== 'object') return;
     this.lastRecv = Date.now();
     switch (msg.t) {
-      case 'i': case 'h': if (this.lock) this.lock.receive(msg); else this.pending.push(msg); break;   // opponent can start a moment before us
+      case 'i': case 'h':
+        if (msg.k !== this.seed) break;     // leftover packet from a previous match
+        if (this.lock) this.lock.receive(msg); else this.pending.push(msg);   // opponent can start a moment before us
+        break;
       case 'p': this.sendMsg({ t: 'q', ts: msg.ts }); break;
-      case 'q': { const r = Date.now() - msg.ts; this.rtt = this.rtt ? this.rtt * 0.7 + r * 0.3 : r; break; }
+      case 'q': {
+        const r = Date.now() - msg.ts;
+        if (!this.rtt) { this.rtt = r; this.jitter = 0; }
+        else { this.jitter = this.jitter * 0.8 + Math.abs(r - this.rtt) * 0.2; this.rtt = this.rtt * 0.7 + r * 0.3; }
+        break;
+      }
+      case 'slow': if (Date.now() - this._slowAt > 1000) { this.extra = Math.min(6, this.extra + 1); this._slowAt = Date.now(); } break;
+      case 'repick': this.remoteSel = null; this.repickFlag = true; if (this.handlers.onRepick) this.handlers.onRepick(); break;
       case 'sel': this.remoteSel = msg; if (this.handlers.onSelect) this.handlers.onSelect(msg); break;
       case 'start': this.startMsg = msg; this.seed = msg.seed; if (this.handlers.onStart) this.handlers.onStart(msg); break;
       case 'full': this._setState('closed', 'That room already has two players.'); break;
@@ -273,17 +359,19 @@ const Net = {
 
   // ---------------------------------------------------------------- match
   inputDelay() {
-    // one-way latency in frames + 2 frames of safety, between 3 (50ms) and 10 (167ms)
+    // one-way latency + a jitter margin, in frames (+1 safety), plus whatever the opponent asked for. 2 (33ms) .. 12 (200ms)
     const oneWay = (this.rtt || 80) / 2;
-    return Math.max(3, Math.min(10, Math.ceil(oneWay / NET_STEP_MS) + 2));
+    const base = Math.ceil((oneWay + 1.5 * this.jitter) / NET_STEP_MS) + 1;
+    return Math.max(2, Math.min(12, base + this.extra));
   },
 
   // Called by both sides right before the Game scene starts. (Host also calls announceStart first.)
   beginMatch(delay) {
-    this.lock = new Lockstep(this.localIdx, delay || this.inputDelay(), (m) => this.sendMsg(m));
+    this.lock = new Lockstep(this.localIdx, delay || this.inputDelay(), (m) => { m.k = this.seed; this.sendMsg(m); });   // k = match id, so old packets can be told apart
     this.wantRematch = false;
+    this._lastStalls = 0; this._calm = 0;
     const queued = this.pending; this.pending = [];
-    queued.forEach((m) => this.lock.receive(m));
+    queued.forEach((m) => { if (m.k === this.seed) this.lock.receive(m); });
   },
 
   // host only: choose seed + settings and tell the guest
