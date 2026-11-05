@@ -3,7 +3,7 @@
 const Music = {
   srcs: ['assets/music/lobby.mp3', 'assets/lobby.mp3'],   // first one that exists is used
   srcIdx: 0,
-  volume: 0.45,
+  volume: 0.15,   // 0 (silent) .. 1 (full)
   el: null, fade: null, unlocked: false, wanted: false,
 
   _make() {
