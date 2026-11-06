@@ -166,6 +166,8 @@ const Net = {
   repickFlag: false,     // opponent asked to go back to hero select after a match
   jitter: 0,             // ms, smoothed |rtt - average|
   extra: 0,              // extra input-delay frames the opponent asked for after it kept waiting for us
+  routeInfo: '',         // debug: which candidate types each side gathered
+  noStun: false,
   route: '',             // 'DIRECT' | 'RELAY' once known (relay = traffic goes through a TURN server = more lag)
   pending: [],           // frames that arrived before our own Game scene started
   handlers: {},          // optional callbacks: onState, onSelect, onStart
@@ -193,7 +195,7 @@ const Net = {
   reset() {
     this.close();
     this.state = 'idle'; this.role = null; this.code = ''; this.error = '';
-    this.lock = null; this.rtt = 0; this.jitter = 0; this.extra = 0; this.route = ''; this.repickFlag = false;
+    this.lock = null; this.rtt = 0; this.jitter = 0; this.extra = 0; this.route = ''; this.routeInfo = ''; this.noStun = false; this.repickFlag = false;
     this.remoteSel = null; this.startMsg = null; this.wantRematch = false; this.pending = [];
   },
 
@@ -292,7 +294,7 @@ const Net = {
       this.sendMsg({ t: 'p', ts: Date.now() });
       if (this.state === 'connected' && Date.now() - this.lastRecv > 8000) this._setState('closed', 'Connection timed out.');
       this._adapt();
-      if (!this.route && (this._ticks === 4 || this._ticks % 10 === 0)) this._probeRoute();
+      if (this._ticks === 4 || this._ticks % 10 === 0) this._probeRoute();   // keep re-checking: ICE may upgrade RELAY -> DIRECT later
     }, 500);
   },
 
@@ -319,7 +321,15 @@ const Net = {
       if (!pc || !pc.getStats) return;
       pc.getStats().then((stats) => {
         const byId = {}; let pairId = null, pair = null;
-        stats.forEach((r) => { byId[r.id] = r; if (r.type === 'transport' && r.selectedCandidatePairId) pairId = r.selectedCandidatePairId; });
+        const lt = {}, rt = {};   // candidate types gathered on each side (host / srflx / prflx / relay)
+        stats.forEach((r) => {
+          byId[r.id] = r;
+          if (r.type === 'transport' && r.selectedCandidatePairId) pairId = r.selectedCandidatePairId;
+          if (r.type === 'local-candidate' && r.candidateType) lt[r.candidateType] = 1;
+          if (r.type === 'remote-candidate' && r.candidateType) rt[r.candidateType] = 1;
+        });
+        this.routeInfo = 'you:' + (Object.keys(lt).join('+') || 'none') + ' / them:' + (Object.keys(rt).join('+') || 'none');
+        this.noStun = !lt.srflx && !lt.prflx;   // we never got a public address -> STUN blocked/failed on our side
         if (pairId) pair = byId[pairId];
         if (!pair) stats.forEach((r) => { if (!pair && r.type === 'candidate-pair' && (r.selected || (r.nominated && r.state === 'succeeded'))) pair = r; });
         if (!pair) return;

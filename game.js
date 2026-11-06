@@ -1080,7 +1080,7 @@ function repickOnline(scene) {
 function updateNetText() {
   if (!netMsgText || !netPingText) return;
   const sw = gameScene.scale.width, sh = gameScene.scale.height;
-  netPingText.setPosition(sw / 2, 6).setText(Net.state === 'connected' ? 'ONLINE  ping ' + (Net.rtt ? Math.round(Net.rtt) : '…') + ' ms  ·  input delay ' + (Net.lock ? Net.lock.delay : '?') + ' f' + (Net.route ? '  ·  ' + Net.route : '') : '');
+  netPingText.setPosition(sw / 2, 6).setText(Net.state === 'connected' ? 'ONLINE  ping ' + (Net.rtt ? Math.round(Net.rtt) : '…') + ' ms  ·  input delay ' + (Net.lock ? Net.lock.delay : '?') + ' f' + (Net.route ? '  ·  ' + Net.route : '') + (Net.route === 'RELAY' && Net.routeInfo ? '\n[' + Net.routeInfo + (Net.noStun ? '  -> your network blocks STUN/NAT' : '') + ']' : '') : '');
   let msg = '', color = '#ffffff';
   if (Net.state === 'closed') { msg = (Net.error || 'Opponent disconnected.') + '\n\nReturning to the lobby…  (ESC = now)'; color = '#ff9c9c'; }
   else if (Net.lock && Net.lock.desync) { msg = 'GAME OUT OF SYNC\n(the two games no longer match — press ESC twice and rejoin)'; color = '#ff9c9c'; }
