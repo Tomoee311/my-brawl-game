@@ -107,6 +107,8 @@ Object.assign(SYNTH_PROFILES, {
 const AudioMgr = {
   scene: null,
   ctx: null,
+  master: null,        // master gain node: every synthesized effect goes through it (volume from Settings)
+  sfxVolume: 1,        // 0..1, set by Controls.applyAudio() (controls.js / Settings screen)
   useSynthProfiles: true,
   preload(scene) {
     this.scene = scene;
@@ -123,9 +125,19 @@ const AudioMgr = {
       this.ctx.resume();
     }
   },
+  // output node for synthesized sounds (applies the sound-effect volume)
+  out() {
+    if (!this.master) {
+      this.master = this.ctx.createGain();
+      this.master.connect(this.ctx.destination);
+    }
+    this.master.gain.value = this.sfxVolume;
+    return this.master;
+  },
   play(key, options = {}) {
     // Unknown event names are intentionally silent; never substitute a sword sound.
     if (!Object.prototype.hasOwnProperty.call(SFX, key) && !SYNTH_PROFILES[key]) return;
+    if (this.sfxVolume <= 0) return;   // sound effects turned off in Settings
     this.unlock();
     // Keep the distinct Web Audio profiles audible even when WAVs are available.
     if (this.useSynthProfiles && SYNTH_PROFILES[key]) {
@@ -137,7 +149,7 @@ const AudioMgr = {
       try {
         // Phaser detune is measured in cents. ±85 cents is approximately ±5% pitch.
         const detune = (options.pitchVariation ? Phaser.Math.Between(-85, 85) : 0) + (options.pitch ? Math.round(1200 * Math.log2(options.pitch)) : 0);
-        this.scene.sound.play(key, { volume: 0.5, detune });
+        this.scene.sound.play(key, { volume: 0.5 * this.sfxVolume, detune });
         return;
       } catch (e) {}
     }
@@ -181,7 +193,7 @@ const AudioMgr = {
           shaper.oversample = '2x';
           osc.connect(shaper); shaper.connect(amp);
         } else osc.connect(amp);
-        amp.connect(this.ctx.destination);
+        amp.connect(this.out());
         osc.start(start); osc.stop(start + tone.duration + 0.01);
       } catch (e) {}
     });
@@ -234,7 +246,7 @@ const AudioMgr = {
         } else {
           src.connect(filter); filter.connect(amp);
         }
-        amp.connect(this.ctx.destination);
+        amp.connect(this.out());
         src.start(start); src.stop(start + noiseSpec.duration + 0.01);
       } catch (e) {}
     });

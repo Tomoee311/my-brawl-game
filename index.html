@@ -22,10 +22,7 @@
 </head>
 <body>
   <div id="game"></div>
-  <div id="help">
-    Move: A / D &nbsp;|&nbsp; Aim up/down: W / S &nbsp;|&nbsp; Jump: SPACE &nbsp;|&nbsp; Drop through platform: S &nbsp;|&nbsp; Dash: SHIFT<br>
-    Light attack: Left Click &nbsp;|&nbsp; Heavy attack: Right Click &nbsp;|&nbsp; Throw / swap weapon: Middle Click (or E / Q / U)<br>
-    F = fullscreen &nbsp;|&nbsp; H = show/hide this text &nbsp;|&nbsp; B = show/hide hitboxes &nbsp;|&nbsp; ESC = back to Lobby (Bot mode) &nbsp;|&nbsp;
+  <div id="help"></div>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script>
@@ -43,19 +40,32 @@
   </script>
   <script src="music.js"></script>
   <script src="juice.js"></script>
+  <script src="controls.js"></script>
   <script src="weapons.js"></script>
   <script src="characters.js"></script>
   <script src="charart.js"></script>
   <script src="ui.js"></script>
   <script src="menu.js"></script>
   <script src="lobby.js"></script>
+  <script src="settings.js"></script>
   <script src="net.js"></script>
   <script src="online.js"></script>
   <script src="bot.js"></script>
+  <script src="tutorial.js"></script>
   <script src="game.js"></script>
   <script>
     // Hide the controls text in the Menu; show it only in the game
     window.setHelpVisible = (v) => { document.getElementById('help').style.display = v ? '' : 'none'; };
+    // The controls text at the bottom of the game always shows the CURRENT bindings from Settings
+    window.refreshHelp = () => {
+      const L = (pid, a) => Controls.label(pid, a);
+      const two = SELECTION.mode === 'friends';
+      let t = `P1 - Move: ${L('p1','left')} / ${L('p1','right')} &nbsp;|&nbsp; Up / Down: ${L('p1','up')} / ${L('p1','down')} &nbsp;|&nbsp; Jump: ${L('p1','jump')} &nbsp;|&nbsp; Dash: ${L('p1','dodge')}<br>` +
+        `Light: ${L('p1','light')} &nbsp;|&nbsp; Heavy: ${L('p1','heavy')} &nbsp;|&nbsp; Pick up / Throw (hold a direction to aim): ${L('p1','throw')}<br>`;
+      if (two) t += `P2 - Move: ${L('p2','left')} / ${L('p2','right')} &nbsp;|&nbsp; Jump: ${L('p2','jump')} &nbsp;|&nbsp; Dash: ${L('p2','dodge')} &nbsp;|&nbsp; Light: ${L('p2','light')} &nbsp;|&nbsp; Heavy: ${L('p2','heavy')} &nbsp;|&nbsp; Pick up / Throw: ${L('p2','throw')}<br>`;
+      t += 'F = fullscreen &nbsp;|&nbsp; H = show/hide this text &nbsp;|&nbsp; B = show/hide hitboxes &nbsp;|&nbsp; ESC = back to Lobby (Bot / Tutorial)';
+      document.getElementById('help').innerHTML = t;
+    };
     window.addEventListener('keydown', (e) => {
       if (e.key === 'h' || e.key === 'H') document.getElementById('help').classList.toggle('hidden');
     });

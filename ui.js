@@ -122,6 +122,20 @@ const UI = {
       g.strokeCircle(x, y, s * 0.36); g.strokeEllipse(x, y, s * 0.36, s * 0.72); g.lineBetween(x - s * 0.36, y, x + s * 0.36, y);
     } else if (kind === 'host') {
       g.strokeCircle(x, y, s * 0.34); g.lineBetween(x - s * 0.15, y, x + s * 0.15, y); g.lineBetween(x, y - s * 0.15, x, y + s * 0.15);
+    } else if (kind === 'gear') {
+      g.strokeCircle(x, y, s * 0.17);
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        g.lineBetween(x + Math.cos(a) * s * 0.27, y + Math.sin(a) * s * 0.27, x + Math.cos(a) * s * 0.37, y + Math.sin(a) * s * 0.37);
+      }
+      g.strokeCircle(x, y, s * 0.28);
+    } else if (kind === 'book') {
+      g.strokeRoundedRect(x - s * 0.36, y - s * 0.28, s * 0.72, s * 0.56, s * 0.06);
+      g.lineBetween(x, y - s * 0.28, x, y + s * 0.28);
+      g.lineBetween(x - s * 0.24, y - s * 0.1, x - s * 0.08, y - s * 0.1);
+      g.lineBetween(x - s * 0.24, y + s * 0.06, x - s * 0.08, y + s * 0.06);
+      g.lineBetween(x + s * 0.08, y - s * 0.1, x + s * 0.24, y - s * 0.1);
+      g.lineBetween(x + s * 0.08, y + s * 0.06, x + s * 0.24, y + s * 0.06);
     } else if (kind === 'join') {
       g.strokeRoundedRect(x - s * 0.02, y - s * 0.34, s * 0.36, s * 0.68, s * 0.06);
       g.lineBetween(x - s * 0.36, y, x + s * 0.1, y); g.lineBetween(x - s * 0.06, y - s * 0.14, x + s * 0.1, y); g.lineBetween(x - s * 0.06, y + s * 0.14, x + s * 0.1, y);

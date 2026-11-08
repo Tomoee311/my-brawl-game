@@ -58,6 +58,7 @@ function botMainStage() {
 
 function botInput(p) {
   const out = botNeutral();
+  if (SELECTION.mode === 'tutorial') return out;   // training dummy: stands still, never attacks, never dodges
   const L = BOT_LEVELS[p.botLevel || SELECTION.botLevel] || BOT_LEVELS.medium;
   const st = botState(p);
   const enemy = players.find((q) => q !== p);
@@ -118,13 +119,15 @@ function botInput(p) {
       if (d < bd) { bd = d; best = spr; }
     };
     WeaponSystem.pickups.forEach((k) => consider(k.sprite));
-    WeaponSystem.thrown.forEach((t) => { if (t.grounded) consider(t.sprite); });
+    WeaponSystem.thrown.forEach((t) => { if (t.grounded && (!t.ownerOnly || t.owner === p)) consider(t.sprite); });
     if (best && bd < L.itemRange && (adx > 140 || Math.random() < 0.02 || bd < adx * 0.7)) {
       const ddx = best.x - px;
       if (Math.abs(ddx) > 10) setMove(ddx > 0 ? 1 : -1);
       if (best.y < py - 70 && onFloor && st.jumpCd === 0) { out.jump = true; st.jumpCd = 16; }
       // if a jump remains, jump again in the air (to reach the upper platform)
       if (!onFloor && best.y < py - 40 && p.jumpsLeft > 0 && body.velocity.y > -60 && st.jumpCd === 0) { out.jump = true; st.jumpCd = 14; }
+      // weapons are no longer picked up automatically: press the pickup key when standing next to it
+      if (bd < 60) out.throwWeapon = true;
       return botEdgeSafe(p, out, myStanding, stage);
     }
   }

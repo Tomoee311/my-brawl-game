@@ -4,6 +4,8 @@ const MAP_WEAPON_POOL = ['spear', 'sword', 'axe', 'gun'];
 const FIRST_SPAWN_DELAY = 30;   // first weapon drops immediately within 0.5 seconds (Brawlhalla style)
 const RE_SPAWN_INTERVAL = 240;  // the next weapon drops about 4 seconds after one is thrown
 const MAX_WORLD_PICKUPS = 2;    // at most 2 on the field at a time
+const AUTO_PICKUP = false;       // false = weapons are only picked up when the player presses the throw/pickup key (E / Q / C / U) next to them
+const PICKUP_REACH = 26;         // extra px around the player's body that counts as "near" a weapon for the manual pickup
 const THROW_SPEED = 780;
 const THROW_LIFE = 600; // Grounded weapon drops stay visible for 10 seconds unless picked up.
 const PICKUP_DESPAWN_TIME = 1200; // a pickup left uncollected on the platform for a long time is removed (1200 frames = 20 s)
@@ -336,6 +338,7 @@ function spawnBrawlhallaPickup(scene, x, y) {
 
 // Spawner logic: when any player is empty-handed, a Brawlhalla flaming sword falls from the sky
 function tickWeaponSpawner(scene) {
+  if (typeof Tutorial !== 'undefined' && Tutorial.active && !Tutorial.allowSpawn) return;   // tutorial: weapons only fall when the lesson needs them
   const activePickups = WeaponSystem.pickups.filter((p) => p.sprite && p.sprite.active);
 
   // never more than 2 on the field (keeps the stage uncluttered)
@@ -362,11 +365,19 @@ function tickWeaponSpawner(scene) {
 }
 
 // when a player picks up a pickup, they receive their character's designated weapon
-function grantCharacterWeapon(p) {
+// specificId: a thrown weapon being picked back up. If it is one of the character's own weapons, that exact weapon is equipped
+// (so a weapon you throw and pick up again is NOT swapped for the alternate one). Sky drops pass nothing and follow the swap rule.
+function grantCharacterWeapon(p, specificId) {
   if (!p || !p.char || !p.char.weaponPool) return;
   const pool = p.char.weaponPool;
-  // SWAP RULE: equip the alternate weapon according to the current weaponIndex
-  setEquippedWeapon(p, pool[p.weaponIndex % pool.length]);
+  const idx = specificId ? pool.indexOf(specificId) : -1;
+  if (idx >= 0) {
+    p.weaponIndex = idx;
+    setEquippedWeapon(p, specificId);
+  } else {
+    // SWAP RULE: equip the alternate weapon according to the current weaponIndex
+    setEquippedWeapon(p, pool[p.weaponIndex % pool.length]);
+  }
   p.pickupLock = 20;
   AudioMgr.play('pickup');
   if (typeof VfxMgr !== 'undefined') {
@@ -374,17 +385,23 @@ function grantCharacterWeapon(p) {
   }
 }
 
-// automatically pick up when a player touches a pickup on the ground
-function tryPickupWeapons() {
-  if (typeof players === 'undefined') return;
+function pickupTouching(p, body, pad) {
+  const b = p.sprite.body;
+  if (!b || !body) return false;
+  return Phaser.Geom.Intersects.RectangleToRectangle(
+    new Phaser.Geom.Rectangle(b.x - pad, b.y - pad, b.width + pad * 2, b.height + pad * 2),
+    new Phaser.Geom.Rectangle(body.x, body.y, body.width, body.height)
+  );
+}
 
+// Housekeeping for weapons lying around (age, despawn, floating bob). Does NOT hand weapons to anyone.
+function tickPickupHousekeeping() {
   for (let i = WeaponSystem.pickups.length - 1; i >= 0; i--) {
     const pk = WeaponSystem.pickups[i];
     if (!pk.sprite || !pk.sprite.active) {
       WeaponSystem.pickups.splice(i, 1);
       continue;
     }
-
     pk.age++;
     // remove it if it has been left uncollected for a long time
     if (pk.age > PICKUP_DESPAWN_TIME) {
@@ -392,30 +409,54 @@ function tryPickupWeapons() {
       WeaponSystem.pickups.splice(i, 1);
       continue;
     }
-
     // after landing, a gentle floating bob effect
     if (pk.sprite.body && pk.sprite.body.blocked.down) {
       pk.sprite.y += Math.sin((pk.age + pk.bobOffset) * 0.1) * 0.3;
     }
-
-    players.forEach((p) => {
-      if (p.dead || p.weaponId || p.spawnHold > 0 || p.pickupLock > 0) return;
-      const b = p.sprite.body;
-      const s = pk.sprite.body;
-      if (b && s && Phaser.Geom.Intersects.RectangleToRectangle(
-        new Phaser.Geom.Rectangle(b.x, b.y, b.width, b.height),
-        new Phaser.Geom.Rectangle(s.x, s.y, s.width, s.height)
-      )) {
-        grantCharacterWeapon(p);
-        if (pk.sprite.destroy) pk.sprite.destroy();
-        WeaponSystem.pickups.splice(i, 1);
-      }
-    });
   }
 }
 
+// Closest weapon on the ground that player p could pick up right now (or null). Does not change anything.
+function findPickupFor(p, pad) {
+  if (!p || p.dead || p.weaponId || p.spawnHold > 0 || p.pickupLock > 0) return null;
+  let best = null, bestD = Infinity;
+  const consider = (kind, idx, sprite, extra) => {
+    if (!sprite || !sprite.active || !pickupTouching(p, sprite.body, pad)) return;
+    const d = Math.abs(sprite.x - p.sprite.x) + Math.abs(sprite.y - p.sprite.y);
+    if (d < bestD) { bestD = d; best = { kind, idx, sprite, weaponId: extra && extra.weaponId }; }
+  };
+  WeaponSystem.pickups.forEach((pk, idx) => consider('pickup', idx, pk.sprite));
+  WeaponSystem.thrown.forEach((t, idx) => { if (t.grounded && (!t.ownerOnly || t.owner === p)) consider('thrown', idx, t.sprite, t); });
+  return best;
+}
+
+// true if p is empty-handed and standing next to a weapon they can pick up (used so a mouse left click picks up instead of attacking)
+function canPickupNearby(p) {
+  return !!findPickupFor(p, PICKUP_REACH);
+}
+
+// Give player p the closest weapon that is lying on the ground next to them. Returns true if one was picked up.
+function pickupNearestFor(p, pad) {
+  const best = findPickupFor(p, pad);
+  if (!best) return false;
+
+  grantCharacterWeapon(p, best.kind === 'thrown' ? best.weaponId : null);
+  if (best.sprite.destroy) best.sprite.destroy();
+  if (best.kind === 'pickup') WeaponSystem.pickups.splice(best.idx, 1);
+  else WeaponSystem.thrown.splice(best.idx, 1);
+  return true;
+}
+
+// Called from the player's update when they press the throw/pickup key while empty-handed (manual pickup).
+function tryPickupWeapons(p) {
+  if (p) return pickupNearestFor(p, PICKUP_REACH);
+  return false;
+}
+
 // Throw a weapon with Middle Mouse Button / Key E / Key Q (100% reliable throw)
-function throwWeapon(p) {
+// Aim: hold a direction while pressing throw. Nothing held = straight ahead (with a small lob), Up = straight up,
+// Up + Forward/Back = 45 degrees up, Down = straight down, Down + side = 45 degrees down. Pressing a side turns the character that way.
+function throwWeapon(p, input) {
   if (!p || !p.weaponId || p.dead || p.dodge.active || p.hitstun > 0) return;
   // so a freshly picked-up weapon isn't thrown right back by a single press (the bug where both pickup + throw vanish)
   if (p.pickupLock > 0) return;
@@ -438,10 +479,20 @@ function throwWeapon(p) {
 
   AudioMgr.play('throw');
 
+  // ---- throw direction from the held keys ----
+  const hx = input ? ((input.right ? 1 : 0) - (input.left ? 1 : 0)) : 0;
+  const vy = input ? (input.up ? -1 : (input.downHeld ? 1 : 0)) : 0;
+  let aimX = p.facing, aimY = 0;
+  if (hx !== 0 || vy !== 0) { aimX = hx; aimY = vy; }
+  if (hx !== 0) p.facing = hx;
+  const aimLen = Math.hypot(aimX, aimY) || 1;
+  const ux = aimX / aimLen, uy = aimY / aimLen;
+  const throwDir = ux !== 0 ? (ux > 0 ? 1 : -1) : p.facing;   // which way a target is knocked when the weapon hits
+
   // the thrown weapon's visual (a sword or gun flying)
   const sprite = gameScene.physics.add.sprite(
-    p.sprite.x + p.facing * 34,
-    p.sprite.body.center.y - 10,
+    p.sprite.x + ux * 34,
+    p.sprite.body.center.y - 10 + uy * 34,
     weaponTextureKey(thrownWeaponId)
   );
   sprite.setDisplaySize(thrownWeaponId === 'gun' ? 48 : 60, thrownWeaponId === 'gun' ? 36 : 28);
@@ -463,11 +514,13 @@ function throwWeapon(p) {
     airTime: 0,
     hitList: [],
     grounded: false,
-    dir: p.facing,   // throw direction (on hit, knock the target the right way even if the thrower has turned around)
+    dir: throwDir,   // throw direction (on hit, knock the target the right way even if the thrower has turned around)
   };
 
-  sprite.setVelocity(p.facing * THROW_SPEED, -220);
-  sprite.setAngularVelocity(p.facing * 540);
+  // flat throws keep the old small upward lob; aimed throws fly exactly along the aimed line
+  sprite.setVelocity(ux * THROW_SPEED, aimY === 0 ? -220 : uy * THROW_SPEED);
+  sprite.setAngularVelocity(throwDir * 540);
+  if (typeof Tutorial !== 'undefined' && Tutorial.active) Tutorial.onThrow(p, aimX, aimY);
   WeaponSystem.thrown.push(drop);
 
   // since a weapon was thrown, push the timer forward so a new pickup drops from the sky quickly
@@ -504,9 +557,9 @@ function tickThrownWeapons() {
 
     // check for hitting an enemy while flying through the air
     if (!item.grounded) {
-      players.forEach((t) => {
-        if (t === item.owner || t.dead || (typeof isInvulnerable === 'function' && isInvulnerable(t))) return;
-        if (item.hitList.indexOf(t) !== -1) return;
+      for (const t of players) {
+        if (t === item.owner || t.dead || (typeof isInvulnerable === 'function' && isInvulnerable(t))) continue;
+        if (item.hitList.indexOf(t) !== -1) continue;
 
         const b = t.sprite.body;
         const s = item.sprite.body;
@@ -515,30 +568,23 @@ function tickThrownWeapons() {
           new Phaser.Geom.Rectangle(s.x, s.y, s.width, s.height)
         )) {
           item.hitList.push(t);
-          const throwAtk = { kind: 'light', damage: 9, baseKb: 290, growth: 5, angle: 26, sfx: 'heavy_impact' };
+          const throwAtk = { kind: 'light', damage: 9, baseKb: 290, growth: 5, angle: 26, sfx: 'heavy_impact', thrown: true };
           if (typeof onHit === 'function') {
             onHit(item.owner || t, t, Object.assign({}, throwAtk, { dirSign: item.dir }));
           }
+          // Brawlhalla-style: the weapon drops where it hit. The target never gets it - only the thrower can pick it back up.
           item.grounded = true;
+          item.ownerOnly = true;
           item.sprite.setAngularVelocity(0);
           item.sprite.setVelocity(item.sprite.body.velocity.x * 0.2, 0);
+          break;
         }
-      });
-    } else {
-      // an empty-handed player nearby can pick up a weapon lying on the ground
-      players.forEach((p) => {
-        if (p.dead || p.weaponId || p.spawnHold > 0 || p.pickupLock > 0) return;
-        const b = p.sprite.body;
-        const s = item.sprite.body;
-        if (b && s && Phaser.Geom.Intersects.RectangleToRectangle(
-          new Phaser.Geom.Rectangle(b.x, b.y, b.width, b.height),
-          new Phaser.Geom.Rectangle(s.x, s.y, s.width, s.height)
-        )) {
-          grantCharacterWeapon(p);
-          if (item.sprite.destroy) item.sprite.destroy();
-          WeaponSystem.thrown.splice(i, 1);
-        }
-      });
+      }
+    } else if (AUTO_PICKUP) {
+      // optional: an empty-handed player touching a weapon on the ground picks it up automatically
+      for (const p of players) {
+        if (pickupNearestFor(p, 0)) break;
+      }
     }
   }
 }
@@ -639,7 +685,8 @@ function clearWeapons() {
 function tickWeapons(scene) {
   if (typeof players !== 'undefined') players.forEach((p) => { if (p.pickupLock > 0) p.pickupLock--; });
   tickWeaponSpawner(scene);
-  tryPickupWeapons();
+  tickPickupHousekeeping();
+  if (AUTO_PICKUP && typeof players !== 'undefined') players.forEach((p) => pickupNearestFor(p, 0));
   tickThrownWeapons();
   tickGunShots();
 }

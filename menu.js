@@ -115,7 +115,9 @@ class MenuScene extends Phaser.Scene {
 
   // ------------------------------------------------------------------ CHARACTER SELECT
   buildChars(w, h) {
-    this.title('CHOOSE YOUR LEGEND', SELECTION.mode === 'bot'
+    this.title('CHOOSE YOUR LEGEND', SELECTION.mode === 'tutorial'
+      ? 'P1 = you, P2 = training dummy (never hits back) — pick a hero and lock in (ESC = Lobby)'
+      : SELECTION.mode === 'bot'
       ? 'P1 = you, P2 = BOT (' + ((typeof BOT_LEVELS !== 'undefined' && BOT_LEVELS[SELECTION.botLevel]) ? BOT_LEVELS[SELECTION.botLevel].label : '') + ') — pick both heroes and lock in (ESC = Lobby)'
       : 'Pick your hero and lock in (ESC = Lobby)');
     const items = [...this.choices];

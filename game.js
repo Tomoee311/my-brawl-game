@@ -88,7 +88,7 @@ let CURRENT_MAP = 'pagoda';   // the map chosen in the Menu is set via SELECTION
 // Selections made in the Menu (menu.js). If you launch directly without the Menu, these defaults are used
 const PLAYER_COLORS = [0xff5a4a, 0x4aa8ff];            // P1 red / P2 blue (marker + HUD)
 const SAME_HERO_TINT = [0xffffff, 0x78aaff];            // if both players pick the same hero, tint P2 blue
-const SELECTION = { p1: 'dante', p2: 'sekiro', map: 'pagoda', mode: 'friends', botLevel: 'medium' };   // mode: 'friends' | 'bot' (chosen in the Lobby)
+const SELECTION = { p1: 'dante', p2: 'sekiro', map: 'pagoda', mode: 'friends', botLevel: 'medium' };   // mode: 'friends' | 'bot' | 'online' | 'tutorial' (chosen in the Lobby)
 
 // Tunable values (edit here to change the game feel)
 const MOVE_SPEED = 300;
@@ -138,7 +138,7 @@ const DROP_FRAMES = 20;   // max frames the player may pass through when droppin
 
 // ---------- Dodge (frames, 60 = 1 second) ----------
 // Hold LEFT/RIGHT while pressing dodge = directional dodge; no direction = spot dodge.
-// Gravity is paused while dodging. Air: still ONE dodge per airtime (p.airDashUsed).
+// Gravity is paused while dodging. Air: ONE dodge per airtime (p.airDashes), +1 for every hit landed while airborne.
 const DODGE_ROLL = {
   duration: 16,  // short recovery — can attack or dodge again the frame this ends
   invuln: 12,
@@ -152,6 +152,17 @@ const DODGE_SPOT = {
   speed: 0,
 };
 const DODGE_SPEED = DODGE_ROLL.speed;
+
+// ---------- Air dash count ----------
+// You start every airtime with AIR_DASHES_BASE air dash(es) (refilled on landing).
+// Landing a hit on an enemy WHILE YOU ARE IN THE AIR gives you +1 extra air dash, and every further air hit adds another one (up to AIR_DASHES_MAX).
+const AIR_DASHES_BASE = 1;
+const AIR_DASHES_MAX = 3;
+
+// ---------- Light attack anti-spam ----------
+// A light attack can never be repeated faster than this many frames (startup + active + recovery + cooldown). 60 frames = 1 second.
+// Fast weapons (katana) get extra cooldown so they can't be mashed.
+const LIGHT_MIN_CYCLE = 32;
 
 // ---------- Knockback / Hitstun ----------
 // Knockback force is calculated with this formula:
@@ -312,6 +323,7 @@ const config = {
     (typeof LobbyScene !== 'undefined' ? LobbyScene : { key: 'Lobby', create() { this.scene.start('Menu'); } }),
     (typeof MenuScene !== 'undefined' ? MenuScene : { key: 'Menu', create() { this.scene.start('Game'); } }),
     (typeof OnlineScene !== 'undefined' ? OnlineScene : { key: 'Online', create() { this.scene.start('Lobby'); } }),
+    (typeof SettingsScene !== 'undefined' ? SettingsScene : { key: 'Settings', create() { this.scene.start('Lobby'); } }),
     { key: 'Game', create, update },
   ],
 };
@@ -527,7 +539,7 @@ function layoutWinUi(w, h) {
 function resetPlayerState(p) {
   endDodge(p, false);
   p.jumpsLeft = MAX_JUMPS;
-  p.airDashUsed = false;
+  p.airDashes = AIR_DASHES_BASE;
   p.attack = newAttackState();
   p.cooldown = 0;
   p.dropBuffer = 0;
@@ -564,6 +576,7 @@ function knockOut(p) {
   resetPlayerState(p);
   p.sprite.setVelocity(0, 0);
   p.sprite.disableBody(true, true);   // hide + disable physics
+  if (SELECTION.mode === 'tutorial') p.stocks = STOCKS;   // practice: never lose the match
   if (p.stocks <= 0) endMatch(players.find((o) => o !== p));
 }
 
@@ -693,7 +706,7 @@ function create() {
     KeyB: () => { SHOW_HITBOX = !SHOW_HITBOX; },
     KeyR: () => { if (match.over) { if (isOnline()) Net.wantRematch = true; else resetMatch(); } },
     Escape: () => {
-      if (SELECTION.mode === 'bot') this.scene.start('Lobby');
+      if (SELECTION.mode === 'bot' || SELECTION.mode === 'tutorial') this.scene.start('Lobby');
       else if (isOnline()) {
         if (Net.state === 'closed' || Date.now() < escArmedUntil) leaveOnline(this); else escArmedUntil = Date.now() + 2000;   // press twice so it is not accidental
       }
@@ -717,50 +730,19 @@ function create() {
   });
 
   // ---------- Players ----------
-  const kb = this.input.keyboard;
-  const wasd = kb.addKeys('W,A,S,D,SPACE,J,K,E,Q,C,U,SHIFT');
-  const arrows = kb.createCursorKeys();
-  const enter = kb.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
-  const numpad1 = kb.addKey(Phaser.Input.Keyboard.KeyCodes.NUMPAD_ONE);
-  const numpad2 = kb.addKey(Phaser.Input.Keyboard.KeyCodes.NUMPAD_TWO);
-  const numpad3 = kb.addKey(Phaser.Input.Keyboard.KeyCodes.NUMPAD_THREE);
-  const numpad5 = kb.addKey(Phaser.Input.Keyboard.KeyCodes.NUMPAD_FIVE);
-  const numpad0 = kb.addKey(Phaser.Input.Keyboard.KeyCodes.NUMPAD_ZERO);
-  const keyM = kb.addKey(Phaser.Input.Keyboard.KeyCodes.M);
-  const keyPeriod = kb.addKey(Phaser.Input.Keyboard.KeyCodes.PERIOD);
-
-  const p1Keys = {
-    left: [wasd.A], right: [wasd.D], down: [wasd.S], up: [wasd.W],
-    jump: [wasd.SPACE],
-    light: [wasd.J],
-    heavy: [wasd.K],
-    throw: [wasd.E, wasd.Q, wasd.C, wasd.U],
-    dodge: [wasd.SHIFT],
-  };
-  if (!LOCAL_TEST || isOnline()) {
-    p1Keys.left.push(arrows.left);
-    p1Keys.right.push(arrows.right);
-    p1Keys.down.push(arrows.down);
-    p1Keys.up.push(arrows.up);
-  }
-
-  const p2Keys = {
-    left: [arrows.left], right: [arrows.right], down: [arrows.down], up: [arrows.up],
-    jump: [enter],
-    light: [numpad1],
-    heavy: [numpad2],
-    throw: [numpad3, numpad5, keyM, keyPeriod],
-    dodge: [numpad0],
-  };
+  // Keys come from controls.js (rebindable in Settings; keyboard keys and mouse buttons)
+  Controls.clearMouse();
+  const p1Keys = Controls.makeKeys(this, 'p1');
+  const p2Keys = Controls.makeKeys(this, 'p2');
 
   const online = isOnline();
   const li = online ? Net.localIdx : 0;      // online: which player is on THIS computer (host = P1, guest = P2)
   players = [
     makePlayer(this, WIDTH / 2 - 120, 300, CHARACTERS[SELECTION.p1] || CHARACTERS.dante, (!online || li === 0) ? p1Keys : null, !online || li === 0),
-    makePlayer(this, WIDTH / 2 + 120, 300, CHARACTERS[SELECTION.p2] || CHARACTERS.sekiro, online ? (li === 1 ? p1Keys : null) : ((LOCAL_TEST && SELECTION.mode !== 'bot') ? p2Keys : null), online && li === 1),
+    makePlayer(this, WIDTH / 2 + 120, 300, CHARACTERS[SELECTION.p2] || CHARACTERS.sekiro, online ? (li === 1 ? p1Keys : null) : ((LOCAL_TEST && SELECTION.mode !== 'bot' && SELECTION.mode !== 'tutorial') ? p2Keys : null), online && li === 1),
   ];
   // Bot mode: P2 is controlled by the Bot AI (bot.js)
-  players[1].isBot = SELECTION.mode === 'bot';
+  players[1].isBot = SELECTION.mode === 'bot' || SELECTION.mode === 'tutorial';   // tutorial: P2 is a training dummy (bot.js returns no input)
   players[1].bot = null;
 
   // ---------- Collisions ----------
@@ -785,6 +767,7 @@ function create() {
   });
 
   // ---------- HUD + overlay ----------
+  if (typeof Tutorial !== 'undefined') Tutorial.stop();
   hud = this.add.graphics();
   overlay = this.add.graphics().setDepth(10);
   const sw = this.scale.width;
@@ -836,6 +819,11 @@ function create() {
   worldCam.ignore([...bgObjs, ...uiObjs]);
   uiCam.ignore([...bgObjs, ...worldObjs]);
   updateCamera(true);
+  if (SELECTION.mode === 'tutorial' && typeof Tutorial !== 'undefined') {
+    Tutorial.start(this);
+    this.events.once('shutdown', () => Tutorial.stop());
+  }
+  if (window.refreshHelp) window.refreshHelp();
   const resizeHandler = (gs) => onResize(gs.width, gs.height);
   this.scale.on('resize', resizeHandler);
   this.events.once('shutdown', () => this.scale.off('resize', resizeHandler));
@@ -869,7 +857,7 @@ function makePlayer(scene, x, y, char, keys, useMouse) {
     dropUntil: 0, dropBuffer: 0, dropThrough: null, dropTimer: 0, downHeld: false, facing: 1,
     attackBuffer: null, animKey: 'idle',
     jumpsLeft: MAX_JUMPS,
-    airDashUsed: false,
+    airDashes: AIR_DASHES_BASE,
     attack: newAttackState(),
     cooldown: 0,
     hitFlash: 0,
@@ -908,7 +896,7 @@ function isInvulnerable(p) {
 }
 
 function canDodge(p, stunned, onFloor) {
-  const airOk = onFloor || !p.airDashUsed;
+  const airOk = onFloor || p.airDashes > 0;
   return !stunned && !p.dodge.active && p.dodgeCooldown <= 0 && p.attack.state === 'none' && airOk;
 }
 
@@ -920,7 +908,7 @@ function startDodge(p, input, onFloor) {
     kind: dir === 0 ? 'spot' : 'roll',
     duration: spec.duration, invuln: spec.invuln, speed: spec.speed,
   };
-  if (!onFloor) p.airDashUsed = true;
+  if (!onFloor) p.airDashes = Math.max(0, p.airDashes - 1);
   if (dir !== 0) p.facing = dir;
   if (typeof AudioMgr !== 'undefined') AudioMgr.play('dodge');
   p.sprite.body.setAllowGravity(false);
@@ -980,21 +968,24 @@ function readKeys(p) {
     return copy;
   }
   const held = (list) => list && list.some((k) => k.isDown);
-  const tapped = (list) => list && list.some((k) => Phaser.Input.Keyboard.JustDown(k));
+  // true if any key / mouse button of the list was pressed this frame (returns that key so we can tell mouse from keyboard)
+  const tapAny = (list) => {
+    let hit = null;
+    (list || []).forEach((k) => { if (Controls.tapped(k) && !hit) hit = k; });
+    return hit;
+  };
+  const tapped = (list) => !!tapAny(list);
 
   let attack = null;
-  if (tapped(p.keys.light)) attack = 'light';
+  let mousePickup = false;
+  const lightHit = tapAny(p.keys.light);
+  if (lightHit) {
+    // empty-handed and standing next to a weapon: a MOUSE light-attack click picks it up instead of attacking
+    if (lightHit.mouse && typeof canPickupNearby === 'function' && canPickupNearby(p)) mousePickup = true;
+    else attack = 'light';
+  }
   if (tapped(p.keys.heavy)) attack = 'heavy';
-  if (p.useMouse && mouseQueue.attack) {
-    attack = mouseQueue.attack;
-    mouseQueue.attack = null;
-  }
-
-  let throwWeapon = tapped(p.keys.throw);
-  if (p.useMouse && mouseQueue.throw) {
-    throwWeapon = true;
-    mouseQueue.throw = false;
-  }
+  const throwWeapon = tapped(p.keys.throw) || mousePickup;
 
   return {
     left: held(p.keys.left),
@@ -1154,6 +1145,7 @@ function simulate(time, dt) {
   if (isOnline()) stepPhysicsOnce();
   updateKoEffects();
   if (typeof tickWeapons === 'function') tickWeapons(gameScene);
+  if (typeof Tutorial !== 'undefined' && Tutorial.active) Tutorial.tick();
   if (typeof VfxMgr !== 'undefined') VfxMgr.tick();
 
   players.forEach((p) => {
@@ -1185,7 +1177,7 @@ function simulate(time, dt) {
     // ---- Touching the ground refills jumps and air dash ----
     if (onFloor && body.velocity.y >= 0) {
       p.jumpsLeft = MAX_JUMPS;
-      p.airDashUsed = false;
+      p.airDashes = AIR_DASHES_BASE;
     }
 
     // ---- Hitstun: can't jump/attack/move while stunned ----
@@ -1213,10 +1205,10 @@ function simulate(time, dt) {
     // ---- Weapon Throw / Pickup (Middle Mouse / Key E / Q / Throw Key) ----
     if (input.throwWeapon && !stunned && !dodging) {
       if (p.weaponId) {
-        if (typeof throwWeapon === 'function') throwWeapon(p);
+        if (typeof throwWeapon === 'function') throwWeapon(p, input);
       } else {
         // Pressing E or Middle Click while empty-handed also picks up a nearby weapon
-        if (typeof tryPickupWeapons === 'function') tryPickupWeapons();
+        if (typeof tryPickupWeapons === 'function') tryPickupWeapons(p);
       }
     }
 
@@ -1375,6 +1367,11 @@ function updateAttack(p, input, onFloor, facingBefore) {
     a.state = 'none';
     a.frame = 0;
     p.cooldown = atk.cooldown;
+    if (atk.kind === 'light') {
+      // anti-spam: pad the cooldown so the whole light attack cycle is never shorter than LIGHT_MIN_CYCLE frames
+      const used = atk.startup + atk.active + atk.recovery;
+      p.cooldown = Math.max(p.cooldown, LIGHT_MIN_CYCLE - used);
+    }
   }
 }
 
@@ -1445,6 +1442,14 @@ function checkHits(attacker) {
   });
 }
 
+// true while the player is off the ground (a ground dash does not count as airborne)
+function isAirborne(p) {
+  const b = p.sprite.body;
+  if (!b) return false;
+  if (p.dodge.active && !p.dodge.air) return false;
+  return !(b.blocked.down || b.touching.down);
+}
+
 // On hit: increase damage % -> compute knockback -> apply hitstun
 function onHit(attacker, target, customAtk) {
   const atk = customAtk || AttackRouter.getAttackData(attacker, attacker.attack.type);
@@ -1452,6 +1457,14 @@ function onHit(attacker, target, customAtk) {
 
   // 1) increase damage %
   target.damage += atk.damage;
+
+  if (typeof Tutorial !== 'undefined' && Tutorial.active) Tutorial.onHit(attacker, target, customAtk, isAirborne(attacker));
+
+  // 1b) hitting an enemy while the attacker is in the air refunds one air dash AND one jump per hit (thrown weapons don't count)
+  if (!(customAtk && customAtk.thrown) && isAirborne(attacker)) {
+    attacker.airDashes = Math.min(AIR_DASHES_MAX, attacker.airDashes + 1);
+    attacker.jumpsLeft = Math.min(MAX_JUMPS, attacker.jumpsLeft + 1);   // an air hit also gives one jump back
+  }
 
   // 2) knockback force (accounts for target weight)
   const kb = (atk.baseKb + target.damage * atk.growth) / (target.weight || 1.0);
@@ -1572,7 +1585,8 @@ function drawHud() {
     hud.fillStyle(accent, 1).fillRoundedRect(x + 10, y + 12, 5, HUD_H - 24, 2.5);
 
     if (uiLabels[i]) uiLabels[i].setText(p.char.name.toUpperCase());
-    if (uiSubs[i]) uiSubs[i].setText(`P${i + 1}${mine ? ' · YOU' : ''}${p.isBot ? ' · BOT ' + ((BOT_LEVELS[SELECTION.botLevel] || {}).label || '').toUpperCase() : ''}`);
+    const botTag = p.isBot ? (SELECTION.mode === 'tutorial' ? ' · TRAINING DUMMY' : ' · BOT ' + ((BOT_LEVELS[SELECTION.botLevel] || {}).label || '').toUpperCase()) : '';
+    if (uiSubs[i]) uiSubs[i].setText(`P${i + 1}${mine ? ' · YOU' : ''}${botTag}`);
     if (uiWpn[i]) uiWpn[i].setText(`${wpnName}  ›  ${nextWeaponName(p)}`);
 
     // ---- jump pips (mint = jumps left) + dash bar ----
@@ -1581,11 +1595,11 @@ function drawHud() {
       hud.fillStyle(j < p.jumpsLeft ? 0x66e08a : 0x1a2448, 1).fillRoundedRect(x + 24 + j * 26, ry, 21, 8, 4);
     }
     let fill = 1;
-    if (p.dodge.active || p.airDashUsed) fill = 0;
+    if (p.dodge.active || p.airDashes <= 0) fill = 0;
     else if (p.dodgeCooldown > 0 && p.dodgeCooldownMax > 0) fill = 1 - p.dodgeCooldown / p.dodgeCooldownMax;
     const dx = x + 24 + MAX_JUMPS * 26 + 10;
     hud.fillStyle(0x1a2448, 1).fillRoundedRect(dx, ry, 52, 8, 4);
-    if (fill > 0.02) hud.fillStyle(fill >= 1 ? 0x66b3ff : 0x3d5f8c, 1).fillRoundedRect(dx, ry, Math.max(8, 52 * fill), 8, 4);
+    if (fill > 0.02) hud.fillStyle(p.airDashes >= 2 ? 0xffd24a : (fill >= 1 ? 0x66b3ff : 0x3d5f8c), 1).fillRoundedRect(dx, ry, Math.max(8, 52 * fill), 8, 4);
 
     // ---- stocks (remaining lives) ----
     for (let j = 0; j < STOCKS; j++) {

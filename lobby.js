@@ -60,6 +60,8 @@ class LobbyScene extends Phaser.Scene {
       { key: 'friends', title: 'PLAY WITH FRIENDS', desc: 'P1 vs P2 on the same PC', color: UI.c.p1, icon: 'versus' },
       { key: 'bot', title: 'PLAY WITH BOT', desc: 'Easy / Medium / Hard', color: UI.c.gold, icon: 'bot' },
       { key: 'online', title: 'PLAY ONLINE', desc: '1 vs 1 over the internet with a room code', color: UI.c.mint, icon: 'globe' },
+      { key: 'tutorial', title: 'TUTORIAL', desc: 'Learn the controls on a training dummy that never hits back', color: 0xb36cff, icon: 'book' },
+      { key: 'settings', title: 'SETTINGS', desc: 'Music / sound volume and keyboard + mouse controls', color: 0x9aa9bb, icon: 'gear' },
     ];
     this.layoutCards(defs, w, h);
     UI.footer(this, w, h, '↑ / ↓  choose      ENTER  confirm      F  fullscreen');
@@ -78,9 +80,10 @@ class LobbyScene extends Phaser.Scene {
   }
 
   layoutCards(defs, w, h) {
-    const bw = Math.min(640, w * 0.9), bh = Math.min(96, h * 0.13), gap = bh * 0.22;
+    const many = defs.length > 3;   // 5 cards on the main lobby: make them a bit smaller
+    const bw = Math.min(640, w * 0.9), bh = many ? Math.min(78, h * 0.098) : Math.min(96, h * 0.13), gap = bh * 0.2;
     const total = defs.length * bh + (defs.length - 1) * gap;
-    const y0 = h * 0.58 - total / 2 + bh / 2;
+    const y0 = h * (many ? 0.6 : 0.58) - total / 2 + bh / 2;
     defs.forEach((d, i) => {
       const x = w / 2, y = y0 + i * (bh + gap);
       UI.card(this, x, y, bw, bh, Object.assign({}, d, { selected: i === this.cursor, locked: !!d.locked }));
@@ -123,6 +126,8 @@ class LobbyScene extends Phaser.Scene {
     if (this.phase === 'main') {
       if (it.d.key === 'friends') { SELECTION.mode = 'friends'; this.go(); }
       else if (it.d.key === 'online') { SELECTION.mode = 'online'; this.leaving = true; this.sfx('heavy_impact'); this.cameras.main.fadeOut(250, 0, 0, 0); this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Online')); }
+      else if (it.d.key === 'tutorial') { SELECTION.mode = 'tutorial'; this.go(); }
+      else if (it.d.key === 'settings') { this.leaving = true; this.sfx('pickup'); this.cameras.main.fadeOut(200, 0, 0, 0); this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Settings')); }
       else if (it.d.key === 'bot') { this.phase = 'bot'; this.cursor = Math.max(0, ['easy', 'medium', 'hard'].indexOf(SELECTION.botLevel || 'medium')); this.sfx('sword_slash'); this.build(); }
     } else {
       SELECTION.mode = 'bot';
