@@ -188,8 +188,9 @@ function renderCharacterArt(p) {
       if (down) { sy = 1 - 0.08 * K * u; sx = 1 + 0.1 * K * u; offY = 1 * u; lean *= diag ? 1.1 : 0.4; }                  // press down
     }
   }
-  skin.setPosition(Math.round(body.center.x + offX), Math.round(body.bottom + ART_FEET_MARGIN + offY));
-  skin.setAngle(lean).setScale(sx, sy);
+  const big = c.artScale || 1;   // some fighters (Thaung) are drawn bigger; the feet margin scales with the art
+  skin.setPosition(Math.round(body.center.x + offX), Math.round(body.bottom + ART_FEET_MARGIN * big + offY));
+  skin.setAngle(lean).setScale(sx * big, sy * big);
   skin.setFlipX(p.facing < 0);
   skin.setAlpha(typeof isInvulnerable === 'function' && isInvulnerable(p) ? 0.35 : 1);
   applySkinTint(p, skin);

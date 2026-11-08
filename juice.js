@@ -292,6 +292,9 @@ const HERO_FX = {
   minsitthar: { main: 0x5fe08a, alt: 0xffd45a, soft: 0xb8f5c8, particle: 'leaf',  pitch: 0.85 },   // leaves / golden light
   aung_zeya:  { main: 0xff6a22, alt: 0xffd24a, soft: 0xffb347, particle: 'ember', pitch: 0.96 }, // dragon fire
   thazin:     { main: 0xb36cff, alt: 0xf5d8ff, soft: 0xd3a0ff, particle: 'mist',  pitch: 1.08 }, // violet lotus
+  thaung:     { main: 0x2fb5ad, alt: 0xd99b35, soft: 0x8fe3dc, particle: 'leaf',  pitch: 0.8 },    // iron teal / bronze
+  hla:        { main: 0xe87932, alt: 0xffd447, soft: 0xffc27a, particle: 'ember', pitch: 1.02 },   // storm bell / lightning
+  kan:        { main: 0xb52c3b, alt: 0xf0e5d0, soft: 0xff8f9c, particle: 'ember', pitch: 1.06 },   // crimson ronin
 };
 const HERO_FX_DEFAULT = { main: 0xffffff, alt: 0xffe9a8, soft: 0xdddddd, particle: 'ember', pitch: 1 };
 function heroFx(p) { return (p && p.char && HERO_FX[p.char.id]) || HERO_FX_DEFAULT; }

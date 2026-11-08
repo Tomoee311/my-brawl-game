@@ -21,7 +21,7 @@ function bindDomKeys(scene, map) {
 const MENU_FONT = (typeof UI !== 'undefined') ? UI.font : 'Arial, "Noto Sans Myanmar", "Myanmar Text", sans-serif';
 const MENU_P_COLORS = [0xff6b5a, 0x5ab8ff];          // P1 red-purple / P2 blue
 const MENU_P_CSS = ['#ff8f80', '#8cc8ff'];
-const MENU_LOCKED_SLOTS = 3;                          // number of "?" cards left for adding more characters
+const MENU_LOCKED_SLOTS = 1;                          // number of "?" cards left for adding more characters
 const MENU_MAP_COLS = 5;
 const MENU_MAP_SLOTS = 10;                            // total card count in the map grid (random + maps + locked)
 

@@ -170,6 +170,84 @@ const CHARACTERS = {
       playstyle: 'Agile aerial fighter with sweeping violet attacks',
     },
   },
+  // ---- New fighters (designed with GPT; sheets are recolours of existing art made by tools/make_variants.py - replace assets/chars/<id>_*.png with real art any time) ----
+  thaung: {
+    id: 'thaung',
+    name: 'Thaung',
+    title: 'The Iron Elephant',
+    sheetKey: 'char_thaung',
+    sheetPath: null,
+    frameWidth: CHAR_FRAME_W,
+    frameHeight: CHAR_FRAME_H,
+    bodyW: 46,
+    bodyH: 66,
+    artScale: 1.14,      // drawn a bit bigger than the others (heavy tank)
+    color: 0x176b68,     // Deep teal lamellar armour
+    accent: 0xd99b35,    // Bronze gold
+    visualStyle: 'sekiro',
+    weaponPool: ['axe'],
+    stats: {
+      moveSpeed: 255,
+      jumpSpeed: 475,
+      weight: 1.38,
+      airControl: 0.7,
+      gravityBonus: 230,
+      axeDamageMult: 1.12,
+      idleBreathRate: 4.6,
+      idleBreathAmount: 0.8,
+      playstyle: 'Slow but devastating tank: wide axe swings, very hard to knock back',
+    },
+  },
+  hla: {
+    id: 'hla',
+    name: 'Hla',
+    title: 'The Storm Bell',
+    sheetKey: 'char_hla',
+    sheetPath: null,
+    frameWidth: CHAR_FRAME_W,
+    frameHeight: CHAR_FRAME_H,
+    bodyW: 38,
+    bodyH: 60,
+    color: 0xe87932,     // Saffron orange
+    accent: 0xffd447,    // Electric yellow
+    visualStyle: 'sekiro',
+    weaponPool: ['spear'],
+    stats: {
+      moveSpeed: 300,
+      jumpSpeed: 530,
+      weight: 1.02,
+      airControl: 0.86,
+      gravityBonus: 0,
+      idleBreathRate: 6.0,
+      idleBreathAmount: 0.7,
+      playstyle: 'Mid-range spacing specialist: long spear pokes keep enemies away',
+    },
+  },
+  kan: {
+    id: 'kan',
+    name: 'Kan',
+    title: 'The Crimson Ronin',
+    sheetKey: 'char_kan',
+    sheetPath: null,
+    frameWidth: CHAR_FRAME_W,
+    frameHeight: CHAR_FRAME_H,
+    bodyW: 40,
+    bodyH: 60,
+    color: 0xb52c3b,     // Crimson red
+    accent: 0xf0e5d0,    // Bone white
+    visualStyle: 'dante',
+    weaponPool: ['axe', 'gun'],
+    stats: {
+      moveSpeed: 335,
+      jumpSpeed: 555,
+      weight: 0.94,
+      airControl: 0.96,
+      gravityBonus: -40,
+      idleBreathRate: 10.0,
+      idleBreathAmount: 1.4,
+      playstyle: 'Aggressive rushdown: close-range axe combos plus gun shots to stop escapes',
+    },
+  },
 };
 
 // Base frame index layouts
