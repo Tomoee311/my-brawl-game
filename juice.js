@@ -286,10 +286,10 @@ const AudioMgr = {
 
 // ====== HERO VFX STYLE: each hero has its own color / particle / pitch ======
 const HERO_FX = {
-  dante:      { main: 0xff4a3a, alt: 0xffc15a, soft: 0xff8a3a, particle: 'ember', pitch: 1.0 },    // flames
-  sekiro:     { main: 0x7fd0ff, alt: 0xffffff, soft: 0xbfe8ff, particle: 'frost', pitch: 1.12 },   // ice / frost
-  zawgyi:     { main: 0xb06cff, alt: 0xff9be8, soft: 0xd9b3ff, particle: 'mist',  pitch: 0.92 },   // magical mist
-  minsitthar: { main: 0x5fe08a, alt: 0xffd45a, soft: 0xb8f5c8, particle: 'leaf',  pitch: 0.85 },   // leaves / golden light
+  dante:      { main: 0x36d1ff, alt: 0xdfe9f7, soft: 0x8fe6ff, particle: 'ember', pitch: 1.0 },    // flames
+  sekiro:     { main: 0xa99bff, alt: 0xe8c15a, soft: 0xd0c8ff, particle: 'frost', pitch: 1.12 },   // ice / frost
+  zawgyi:     { main: 0x8a5fe0, alt: 0x7de0ff, soft: 0xc9aaff, particle: 'mist',  pitch: 0.92 },   // magical mist
+  minsitthar: { main: 0xe0ad2c, alt: 0x2a4fa8, soft: 0xf4d27a, particle: 'leaf',  pitch: 0.85 },   // leaves / golden light
   aung_zeya:  { main: 0xff6a22, alt: 0xffd24a, soft: 0xffb347, particle: 'ember', pitch: 0.96 }, // dragon fire
   thazin:     { main: 0xb36cff, alt: 0xf5d8ff, soft: 0xd3a0ff, particle: 'mist',  pitch: 1.08 }, // violet lotus
   thaung:     { main: 0x2fb5ad, alt: 0xd99b35, soft: 0x8fe3dc, particle: 'leaf',  pitch: 0.8 },    // iron teal / bronze
