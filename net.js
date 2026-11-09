@@ -178,6 +178,27 @@ const Net = {
     return (typeof window !== 'undefined' && window.PEER_OPTIONS) ? window.PEER_OPTIONS : {};
   },
 
+  // Fetch short-lived TURN credentials from our own Worker. If it is not yet
+  // configured or temporarily unavailable, keep STUN-only P2P working.
+  async loadPeerOptions() {
+    const base = this.peerOptions();
+    const url = typeof window !== 'undefined' ? window.TURN_CREDENTIALS_URL : '';
+    if (!url || typeof fetch !== 'function') return base;
+    try {
+      const response = await fetch(url, { method: 'GET', cache: 'no-store', credentials: 'omit' });
+      if (!response.ok) throw new Error('TURN credentials unavailable (' + response.status + ')');
+      const data = await response.json();
+      if (!Array.isArray(data.iceServers) || !data.iceServers.length) throw new Error('Invalid TURN response');
+      const current = (base.config && base.config.iceServers) || [];
+      return Object.assign({}, base, { config: Object.assign({}, base.config || {}, {
+        iceServers: current.concat(data.iceServers), iceCandidatePoolSize: 4
+      }) });
+    } catch (e) {
+      console.warn('[My Brawl] TURN credentials unavailable; trying direct P2P with STUN only.', e);
+      return base;
+    }
+  },
+
   available() { return typeof Peer !== 'undefined'; },
 
   makeCode() {
@@ -229,9 +250,12 @@ const Net = {
     this.role = 'host';
     this.code = this.makeCode();
     this._setState('hosting', '');
-    const peer = new Peer(NET_ROOM_PREFIX + this.code, this.peerOptions());
-    this.peer = peer;
-    peer.on('open', () => { if (this.handlers.onOpen) this.handlers.onOpen(this.code); });
+    const roomId = NET_ROOM_PREFIX + this.code;
+    this.loadPeerOptions().then((options) => {
+      if (this.state !== 'hosting' || this.role !== 'host') return;
+      const peer = new Peer(roomId, options);
+      this.peer = peer;
+      peer.on('open', () => { if (this.handlers.onOpen) this.handlers.onOpen(this.code); });
     peer.on('connection', (conn) => {
       if (this.conn) {   // room is 1v1 only: tell the third person and hang up
         const refuse = () => { try { conn.send({ t: 'full' }); setTimeout(() => { try { conn.close(); } catch (e) {} }, 300); } catch (e) {} };
@@ -244,7 +268,8 @@ const Net = {
       if (e && e.type === 'unavailable-id' && tries < 5) { try { peer.destroy(); } catch (x) {} this.host(tries + 1); return; }   // code already taken: pick another
       this._setState('closed', this._explain(e));
     });
-    peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });   // lost the signalling server only; the game link is separate
+      peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });   // signalling reconnect; established P2P data path is separate
+    }).catch((e) => this._setState('closed', 'Could not prepare network connection: ' + e.message));
   },
 
   // ---------------------------------------------------------------- guest
@@ -254,14 +279,17 @@ const Net = {
     this.role = 'guest';
     this.code = String(code || '').toUpperCase().replace(/[^A-Z]/g, '');
     this._setState('joining', '');
-    const peer = new Peer(this.peerOptions());
-    this.peer = peer;
-    peer.on('open', () => {
-      const conn = peer.connect(NET_ROOM_PREFIX + this.code, { reliable: true });
-      this._attach(conn);
-      this._joinTimer = setTimeout(() => { if (this.state === 'joining') { this._setState('closed', 'Could not connect. Check the room code, or try again (some networks block direct connections).'); this.close(); } }, 15000);
-    });
-    peer.on('error', (e) => this._setState('closed', this._explain(e)));
+    this.loadPeerOptions().then((options) => {
+      if (this.state !== 'joining' || this.role !== 'guest') return;
+      const peer = new Peer(options);
+      this.peer = peer;
+      peer.on('open', () => {
+        const conn = peer.connect(NET_ROOM_PREFIX + this.code, { reliable: true });
+        this._attach(conn);
+        this._joinTimer = setTimeout(() => { if (this.state === 'joining') { this._setState('closed', 'Could not connect. Check the room code, or try again (some networks block direct connections).'); this.close(); } }, 15000);
+      });
+      peer.on('error', (e) => this._setState('closed', this._explain(e)));
+    }).catch((e) => this._setState('closed', 'Could not prepare network connection: ' + e.message));
   },
 
   _explain(e) {

@@ -1,0 +1,8 @@
+name = "my-brawl-turn-credentials"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+
+[vars]
+# Replace with the exact public origin(s) of your Vercel deployment.
+# Separate multiple origins with commas. No trailing slash.
+ALLOWED_ORIGINS = "https://YOUR-PROJECT.vercel.app"

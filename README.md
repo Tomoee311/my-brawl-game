@@ -39,7 +39,8 @@ Phaser 3 platform fighter (Brawlhalla style). Modes: **Friends** (same PC), **Bo
 ## Online mode
 - PLAY ONLINE -> HOST A ROOM gives a 4-letter code (or press C to copy an invite link).
 - Friend: PLAY ONLINE -> JOIN A ROOM, type the code (or open the invite link).
-- Peer-to-peer WebRTC through the free PeerJS cloud (signalling only). No server of your own, no cost.
+- Peer-to-peer WebRTC through the PeerJS cloud (signalling only). Game input data goes directly browser-to-browser whenever ICE can establish a direct route.
+- Optional Cloudflare Realtime TURN fallback uses short-lived credentials from `cloudflare-worker/`; TURN is used only when direct ICE connectivity is unavailable. Cloudflare documents a 1,000 GB/month Realtime TURN/SFU free allowance, then $0.05/GB egress; verify current account pricing before enabling.
 - Deterministic lockstep: only button presses are sent; input delay adapts to ping + jitter during the match (2-12 frames). The top of the match screen shows ping, input delay and DIRECT / RELAY (relay = slower).
 - Stage select: both players vote. Same pick = that stage, different picks = random one of the two.
 - After a match: R = rematch, M = re-pick hero/stage (both players go back to select), L = leave (the opponent returns to the lobby automatically).
@@ -73,6 +74,15 @@ Shared UI kit in `ui.js` (glass panels, icons, embers). Font: Poppins from Googl
 
 ## Deploy
 GitHub repo root = this folder. Vercel: Framework "Other", no build command, no output directory.
+
+### Optional free-tier TURN fallback (recommended for friends on different WiFi)
+1. Deploy the app to Vercel first.
+2. Follow `cloudflare-worker/README.md` to deploy the Cloudflare Worker and store `TURN_KEY_ID` / `TURN_API_TOKEN` as Worker secrets.
+3. Set `ALLOWED_ORIGINS` in `cloudflare-worker/wrangler.toml` to your exact Vercel origin.
+4. Set `window.TURN_CREDENTIALS_URL` in `index.html` to the deployed Worker `/api/turn-credentials` URL, then commit and redeploy Vercel.
+5. Rotate the old Metered TURN credentials that were previously embedded in `index.html`; those credentials were public in the client bundle and should no longer be trusted.
+
+Without the Worker URL, the game still tries direct P2P using public STUN servers, but players behind restrictive NAT/firewalls may fail to connect because no TURN fallback credentials are available. A TURN relay can improve connection success, but it does not guarantee lower ping than a direct path.
 
 ## Tests (Node)
     node tests/net.test.js && node tests/peer-flow.test.js && node tests/load.test.js

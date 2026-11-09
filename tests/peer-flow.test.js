@@ -44,6 +44,16 @@ const mk = () => { const n = Object.create(NetBase); n.pending = []; n.handlers 
   assert.strictEqual(H.state, 'connected'); assert.strictEqual(G.state, 'connected');
   console.log('ok  guest joined with the code; both connected');
 
+  // ICE configuration can be loaded from a short-lived TURN credential endpoint.
+  const oldWindow = global.window, oldFetch = global.fetch;
+  global.window = { PEER_OPTIONS: { config: { iceServers: [{ urls: 'stun:example.test' }] } }, TURN_CREDENTIALS_URL: 'https://turn.example.test/api/turn-credentials' };
+  global.fetch = async () => ({ ok: true, json: async () => ({ iceServers: [{ urls: 'turn:example.test', username: 'temporary', credential: 'temporary' }] }) });
+  const iceOptions = await NetBase.loadPeerOptions.call(H);
+  assert.strictEqual(iceOptions.config.iceServers.length, 2, 'temporary TURN server is added to STUN defaults');
+  assert.strictEqual(iceOptions.config.iceServers[1].username, 'temporary');
+  global.window = oldWindow; global.fetch = oldFetch;
+  console.log('ok  short-lived TURN credentials merge with direct/STUN ICE defaults');
+
   G.sendMsg({ t: 'sel', char: 'thiri', ready: true, map: 'random' });
   await wait(10);
   assert.strictEqual(H.remoteSel.char, 'thiri'); assert.strictEqual(H.remoteSel.ready, true);
