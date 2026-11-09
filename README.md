@@ -46,6 +46,17 @@ Phaser 3 platform fighter (Brawlhalla style). Modes: **Friends** (same PC), **Bo
 - Keep the game tab visible while playing (browsers pause hidden tabs, which makes the opponent wait).
 - Same browser family on both sides (Chrome/Edge) is safest; a hash check shows "GAME OUT OF SYNC" if the games diverge.
 
+## Maps (4)
+| Map | Look | Layout |
+|---|---|---|
+| Golden Pagoda Skies | golden pagodas, balloons, evening cloud sea | wide main stage + 2 side platforms |
+| Moonlit Lotus Lake | lotus pond under a full moon | wide main stage + 2 side platforms |
+| Mount Popa Embers | volcanic dusk, lava rivers, drifting embers | narrow main stage + 3 platforms (one high in the middle) |
+| Frostpeak Aurora | snow peaks under an aurora, ice pagodas | extra-wide main stage + 2 far side platforms |
+
+Maps are defined in `MAPS` in `game.js` (colliders, background layers, stage art). The art of the two newest maps is painted by code:
+`python3 tools/make_maps.py` (or `popa` / `aurora`). Replace the PNGs in `assets/maps/<id>/` with hand-painted art any time.
+
 ## Character art
 Sprite sheets are in `assets/chars/<name>_<weapon>.png` (8 columns x 11 rows of 160x128 frames, facing right).
 The art of all nine fighters is drawn by code, so it can be redrawn at any time:
