@@ -251,3 +251,41 @@ def dress_kan(c, cfg, p, J, weapon, wa, style):
     sg = (J['sh_f'][0] + 1.5, J['sh_f'][1] - 1.5)
     c.part(ellipse(sg, 4.6, 3.6), t['black'])
     c.dots([(sg[0] + 0.5, sg[1])], t['gold'], 1.0)
+
+
+# =============================================================== attack looks (sprite poses) - see pose_attack() in chibi_engine.py
+# u = rising (recovery boost): weapon up, body lifted; d = dive: weapon down, body tilted; s = dash-in; n = signature neutral
+STYLES_NEW = {
+    'thaung': {
+        'axe': {
+            'light': dict(wind=20, after=10, lean_w=-4, lean_s=28, x_s=12, crouch_s=4, x_w=-6, face='yell', a_s=60),
+            'heavy_n': dict(wind=165, a_s=82, crouch_w=6, lean_w=-12, x_w=-5, crouch_s=8, lean_s=22, x_s=3, after=-6, two=True),
+            'heavy_s': dict(wind=30, a_s=40, x_w=-8, crouch_w=6, lean_w=-14, x_s=20, lean_s=30, crouch_s=5, after=10, two=True),
+            'heavy_u': dict(a_s=-85, wind=-80, crouch_w=8, lean_w=-6, y_s=-6, lean_s=-8, x_s=3, leg_f_s=16, leg_b_s=-14, after=-20, y_r=-5, x_w=-2, two=True),
+            'heavy_d': dict(a_s=82, wind=170, crouch_w=2, lean_w=-4, y_s=-3, lean_s=22, spin_s=18, x_s=5, leg_f_s=-10, leg_b_s=10, after=-8, two=True, y_r=-2),
+        },
+    },
+    'hla': {
+        'spear': {
+            'light': dict(wind=22, x_s=10, lean_s=10, after=14, x_w=-4),
+            'heavy_s': dict(wind=28, crouch_w=3, lean_w=-10, x_w=-9, x_s=18, lean_s=20, crouch_s=2, after=10, leg_f_s=34, leg_b_s=-30),
+            'heavy_n': dict(wind=160, after=160, spin_s=18, x_s=2, lean_s=8, two=True),
+            'heavy_u': dict(a_s=-88, wind=-70, crouch_w=7, lean_w=-6, y_s=-11, lean_s=-8, x_s=3, leg_f_s=16, leg_b_s=-14, after=-20, y_r=-5, x_w=-2),
+            'heavy_d': dict(a_s=88, wind=170, crouch_w=2, lean_w=-4, y_s=-6, lean_s=22, spin_s=18, x_s=5, leg_f_s=-10, leg_b_s=10, after=-8, two=True, y_r=-2),
+        },
+    },
+    'kan': {
+        'axe': {
+            'light': dict(wind=45, x_s=9, lean_s=14, after=20),
+            'heavy_n': dict(wind=170, after=170, spin_s=28, lean_s=10, y_s=-2, x_s=2, crouch_w=4, two=True),
+            'heavy_s': dict(wind=170, after=170, spin_s=28, lean_s=14, y_s=-2, x_s=18, crouch_w=4, two=True),
+            'heavy_u': dict(a_s=-85, wind=-100, crouch_w=7, lean_w=-6, y_s=-9, lean_s=-8, x_s=3, leg_f_s=16, leg_b_s=-14, after=-20, y_r=-5, x_w=-2, spin_s=-30, two=True),
+            'heavy_d': dict(a_s=82, wind=170, crouch_w=2, lean_w=-4, y_s=-6, lean_s=22, spin_s=30, x_s=5, leg_f_s=-10, leg_b_s=10, after=-8, two=True, y_r=-2),
+        },
+        'gun': {
+            'light': dict(wind=18, x_s=4, lean_s=6, after=10),
+            'heavy': dict(wind=25, lean_s=-4, x_s=-3, crouch_s=2, x_r=-4),
+            'heavy_u': dict(wind=10, a_s=-80, lean_s=-14, y_s=-7, x_s=-3, crouch_w=4, after=-8, two=False),
+        },
+    },
+}

@@ -11,6 +11,7 @@ from chibi_engine import build_sheet, preview
 import fighters as F
 import fighters2 as F2
 
+ATK_STYLES = dict(F.STYLES_NEW, **F2.STYLES_VETS)     # per-fighter attack poses
 OUT = os.path.join(os.path.dirname(__file__), '..', 'assets', 'chars')
 # name -> (config, dress function, weapons, file prefix used by the game in assets/chars/)
 JOBS = {
@@ -32,7 +33,7 @@ if __name__ == '__main__':
     for name in want:
         cfg, dress, weapons, prefix = JOBS[name]
         for w in weapons:
-            sheet = build_sheet(cfg, dress, None if w == 'unarmed' else w)
+            sheet = build_sheet(cfg, dress, None if w == 'unarmed' else w, atk_style=ATK_STYLES.get(name, {}).get(w))
             sheet.save(os.path.join(OUT, '%s_%s.png' % (prefix, w)))
             print('wrote', '%s_%s.png' % (prefix, w))
             if '--preview' in sys.argv:

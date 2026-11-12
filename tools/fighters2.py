@@ -331,3 +331,92 @@ CFG_T = dict(leg=12, torso=14, head_r=10, shoulder=18, hip_w=10, arm=9)
 CFG_P = dict(leg=12, torso=13, head_r=10, shoulder=15, hip_w=9, arm=9)
 
 DRESS = {name: humanoid(spec) for name, spec in dict(zayar=ZAYAR, sandar=SANDAR, weikza=WEIKZA, sithu=SITHU, thura=THURA, padamya=PADAMYA).items()}
+
+
+# =============================================================== attack looks (sprite poses) - see pose_attack() in chibi_engine.py
+STYLES_VETS = {
+    'zayar': {
+        'katana': {
+            'light': dict(wind=40, after=15, x_w=-1, x_s=4, lean_s=12, crouch_s=1),
+            'heavy_s': dict(wind=150, x_w=-9, crouch_w=5, lean_w=-14, x_s=16, lean_s=20, after=10, two=False),
+            'heavy_n': dict(wind=60, x_s=6, lean_s=12, after=20),
+            'heavy_u': dict(a_s=-80, wind=-100, crouch_w=7, lean_w=-6, y_s=-9, lean_s=-8, x_s=3, leg_f_s=16, leg_b_s=-14, after=-20, y_r=-5, x_w=-2),
+            'heavy_d': dict(a_s=75, wind=170, crouch_w=2, lean_w=-4, y_s=-6, lean_s=22, spin_s=14, x_s=5, leg_f_s=-10, leg_b_s=10, after=-8, two=True, y_r=-2),
+        },
+        'gun': {
+            'light': dict(wind=20, after=10, x_s=1),
+            'heavy': dict(wind=50, lean_s=-6, x_s=-2, x_r=-4),
+            'heavy_u': dict(wind=10, a_s=-80, lean_s=-14, y_s=-7, x_s=-3, crouch_w=4, after=-8),
+        },
+    },
+    'sandar': {
+        'katana': {
+            'light': dict(wind=90, after=70, lean_s=14, x_s=6),
+            'heavy_s': dict(wind=120, x_w=-8, crouch_w=5, x_s=16, lean_s=18, after=40, spin_s=12),
+            'heavy_n': dict(wind=160, after=160, spin_s=25, x_s=0, y_s=-4, lean_s=8, two=True),
+            'heavy_u': dict(a_s=-85, wind=-100, crouch_w=7, lean_w=-6, y_s=-9, lean_s=-8, x_s=3, leg_f_s=16, leg_b_s=-14, after=-20, y_r=-5, x_w=-2, spin_s=-28, two=True),
+            'heavy_d': dict(a_s=82, wind=170, crouch_w=2, lean_w=-4, y_s=-6, lean_s=22, spin_s=32, x_s=5, leg_f_s=-10, leg_b_s=10, after=-8, two=True, y_r=-2),
+        },
+        'spear': {
+            'light': dict(wind=40, x_s=8),
+            'heavy_s': dict(wind=30, x_w=-6, lean_w=-10, x_s=6, lean_s=12, crouch_s=3, after=20, leg_f_s=30),
+            'heavy_n': dict(wind=160, after=160, spin_s=25, x_s=0, y_s=-4, lean_s=8, two=True),
+            'heavy_u': dict(a_s=-85, wind=-100, crouch_w=7, lean_w=-6, y_s=-9, lean_s=-8, x_s=3, leg_f_s=16, leg_b_s=-14, after=-20, y_r=-5, x_w=-2, spin_s=-28, two=True),
+            'heavy_d': dict(a_s=82, wind=170, crouch_w=2, lean_w=-4, y_s=-6, lean_s=22, spin_s=32, x_s=5, leg_f_s=-10, leg_b_s=10, after=-8, two=True, y_r=-2),
+        },
+    },
+    'weikza': {
+        'spear': {
+            'light': dict(wind=30, x_s=5, lean_s=8, after=25),
+            'heavy_s': dict(wind=40, lean_w=-12, x_w=-6, x_s=4, lean_s=-6, crouch_s=3, after=-10, y_s=-2, two=True),
+            'heavy_n': dict(wind=60, lean_w=-12, crouch_w=4, x_s=3, after=40, y_s=-3, two=True),
+            'heavy_u': dict(a_s=-85, wind=-100, crouch_w=7, lean_w=-6, y_s=-12, lean_s=-8, x_s=3, leg_f_s=4, leg_b_s=-4, after=-20, y_r=-5, x_w=-2),
+            'heavy_d': dict(a_s=82, wind=170, crouch_w=2, lean_w=-4, y_s=-6, lean_s=22, spin_s=18, x_s=5, leg_f_s=-10, leg_b_s=10, after=-8, two=True, y_r=-2),
+        },
+        'gun': {
+            'light': dict(wind=15, x_s=0, after=10),
+            'heavy': dict(wind=40, lean_s=-8, x_s=-4, crouch_s=3, two=True, x_r=-5),
+        },
+    },
+    'sithu': {
+        'sword': {
+            'light': dict(wind=55, after=35, crouch_s=2, x_s=4),
+            'heavy_n': dict(wind=140, x_w=-4, crouch_w=4, lean_w=-4, crouch_s=4, lean_s=10, x_s=5, two=True, after=55),
+            'heavy_s': dict(wind=60, x_w=-6, crouch_w=5, lean_w=-10, x_s=18, lean_s=22, crouch_s=3, two=True, after=20),
+            'heavy_u': dict(a_s=-85, wind=-100, crouch_w=7, lean_w=-6, y_s=-9, lean_s=-8, x_s=3, leg_f_s=16, leg_b_s=-14, after=-20, y_r=-5, x_w=-2, two=True),
+            'heavy_d': dict(a_s=82, wind=170, crouch_w=2, lean_w=-4, y_s=-6, lean_s=22, spin_s=18, x_s=5, leg_f_s=-10, leg_b_s=10, after=-8, two=True, y_r=-2, crouch_s=4),
+        },
+        'axe': {
+            'light': dict(wind=60, after=35, crouch_s=2, x_s=4),
+            'heavy_n': dict(wind=150, crouch_w=6, x_s=4, lean_s=14, two=True, after=50),
+            'heavy_s': dict(wind=70, x_w=-6, crouch_w=6, lean_w=-10, x_s=16, lean_s=22, crouch_s=3, two=True, after=24),
+            'heavy_u': dict(a_s=-85, wind=-100, crouch_w=7, lean_w=-6, y_s=-9, lean_s=-8, x_s=3, leg_f_s=16, leg_b_s=-14, after=-20, y_r=-5, x_w=-2, spin_s=-24, two=True),
+            'heavy_d': dict(a_s=82, wind=170, crouch_w=2, lean_w=-4, y_s=-6, lean_s=22, spin_s=18, x_s=5, leg_f_s=-10, leg_b_s=10, after=-8, two=True, y_r=-2),
+        },
+    },
+    'thura': {
+        'sword': {
+            'light': dict(wind=35, x_s=6, lean_s=12, after=15),
+            'heavy_n': dict(a_s=-62, wind=-95, crouch_w=6, lean_w=-10, y_s=-6, lean_s=6, after=-22, x_s=5, two=False),
+            'heavy_s': dict(wind=50, x_w=-7, lean_w=-12, x_s=20, lean_s=24, after=14),
+            'heavy_u': dict(a_s=-85, wind=-100, crouch_w=7, lean_w=-6, y_s=-12, lean_s=-8, x_s=3, leg_f_s=16, leg_b_s=-14, after=-30, y_r=-5, x_w=-2),
+            'heavy_d': dict(a_s=82, wind=170, crouch_w=2, lean_w=-4, y_s=-6, lean_s=22, spin_s=18, x_s=5, leg_f_s=-10, leg_b_s=10, after=-8, two=False, y_r=-2),
+        },
+        'spear': {
+            'light': dict(wind=150, after=150, spin_s=-20, x_s=0, lean_s=6),
+            'heavy_n': dict(wind=60, x_s=10, lean_s=12),
+            'heavy_s': dict(wind=40, x_w=-6, lean_w=-10, x_s=18, lean_s=20, after=12),
+            'heavy_u': dict(a_s=-85, wind=-100, crouch_w=7, lean_w=-6, y_s=-9, lean_s=-8, x_s=3, leg_f_s=16, leg_b_s=-14, after=-20, y_r=-5, x_w=-2, spin_s=-26),
+            'heavy_d': dict(a_s=82, wind=170, crouch_w=2, lean_w=-4, y_s=-6, lean_s=22, spin_s=18, x_s=5, leg_f_s=-10, leg_b_s=10, after=-8, two=True, y_r=-2),
+        },
+    },
+    'padamya': {
+        'chakram': {
+            'light': dict(wind=45, after=40, y_s=-3, x_s=3, two=False),
+            'heavy_n': dict(wind=80, after=80, y_s=-5, x_s=8, lean_s=12, two=False),
+            'heavy_s': dict(wind=60, after=30, y_s=-3, x_s=18, lean_s=14, two=False),
+            'heavy_u': dict(a_s=-85, wind=-100, crouch_w=7, lean_w=-6, y_s=-9, lean_s=-8, x_s=3, leg_f_s=16, leg_b_s=-14, after=-20, y_r=-5, x_w=-2, spin_s=-30, two=False),
+            'heavy_d': dict(a_s=82, wind=170, crouch_w=2, lean_w=-4, y_s=-6, lean_s=22, spin_s=26, x_s=5, leg_f_s=-10, leg_b_s=10, after=-8, two=False, y_r=-2),
+        },
+    },
+}

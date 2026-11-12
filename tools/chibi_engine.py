@@ -358,33 +358,64 @@ def pose_dodge_roll(i):
                 kind='roll', face='blink', sway=0)
 
 
-def pose_attack(name, phase, weapon):
+def style_for(style, kind, token):
+    """per-fighter attack look: style = {'light': {...}, 'heavy': {...}, 'heavy_u': {...}}  (general -> specific)"""
+    st = {}
+    if style:
+        st.update(style.get(kind, {}))
+        parent = {'uf': 'u', 'ub': 'u', 'df': 'd', 'db': 'd'}.get(token)
+        if parent:      # diagonal: start from the straight up / down pose but keep the diagonal's own 45-degree weapon angle
+            inh = dict(style.get(kind + '_' + parent, {}))
+            inh.pop('a_s', None)
+            st.update(inh)
+        st.update(style.get(kind + '_' + token, {}))
+    return st
+
+
+def pose_attack(name, phase, weapon, style=None):
+    """phase 0 = wind-up, 1 = strike, 2 = recover.  Style keys (all optional):
+       wind / after     weapon swing-back / follow-through (degrees)      a_s  absolute weapon angle on the strike
+       x_w x_s x_r      body shift (px) in each phase (x_s = lunge)        y_s  hop (negative = up)
+       lean_w lean_s lean_r   torso lean   |  crouch_w crouch_s  |  spin_s spin_r  whole-body roll (degrees)
+       two (two hands)  face  leg_f_s leg_b_s (stance on the strike)"""
     heavy = 'heavy' in name
+    kind = 'heavy' if heavy else 'light'
     token = name.split('_')[0] if '_' in name else name[0]
-    if '_' not in name:
-        token = name[0]
+    st = style_for(style, kind, token)
     a = DIR_ANGLE[token]
+    a_use = st.get('a_s', a)
     u = token in ('u', 'uf', 'ub')
     d = token in ('d', 'df', 'db')
     k = 1.0 if not heavy else 1.5
-    kind = 'atk'
+    two = st.get('two', heavy)
+    face = st.get('face', 'yell' if heavy else 'normal')
     if phase == 0:      # wind-up
-        wa = a - (70 if not heavy else 105)
-        if token == 'd':
-            wa = a - 95
-        if token == 'u':
-            wa = a + 60
-        return Pose(weapon=wa, lean=-8 * k, crouch=2 + (3 if heavy else 0) + (2 if d else 0), x=-3 * k, leg_f=6, leg_b=-16, arm_f=a - 80, arm_b=150,
-                    two_hand=heavy or weapon == 'axe' and heavy, face='yell' if heavy else 'normal', sway=-3, heavy=heavy, kind=kind, strike=0)
+        if 'wind' in st:
+            wa = a_use + st['wind'] * 0.9 if token == 'u' else a_use - st['wind']
+        else:
+            wa = a - (70 if not heavy else 105)
+            if token == 'd':
+                wa = a - 95
+            if token == 'u':
+                wa = a + 60
+        return Pose(weapon=wa, lean=st.get('lean_w', -8 * k), crouch=st.get('crouch_w', 2 + (3 if heavy else 0) + (2 if d else 0)), x=st.get('x_w', -3 * k),
+                    leg_f=6, leg_b=-16, arm_f=a - 80, arm_b=150, two_hand=two, face=face if heavy else st.get('face', 'normal'), sway=-3, heavy=heavy,
+                    kind='atk', strike=0, roll=st.get('spin_w'))
     if phase == 1:      # strike
-        lunge = 7 * k if token not in ('u',) else 2
-        return Pose(weapon=a, lean=(10 if not u else -4) * k, crouch=(1 if not d else 4), x=lunge, leg_f=26 if not u else 6, leg_b=-24 if not u else -6,
-                    lift_b=0 if not u else 2, arm_f=a, arm_b=70 if not heavy else a + 20, two_hand=heavy, face='yell', sway=9 * k, strike=1, heavy=heavy, kind=kind)
-    return Pose(weapon=a + (28 if not heavy else 44), lean=3, crouch=2, x=2 * k, leg_f=14, leg_b=-10, arm_f=a + 40, arm_b=100, sway=4, strike=0, heavy=heavy, kind=kind)
+        lunge = st.get('x_s', 7 * k if token not in ('u',) else 2)
+        ys = st.get('y_s', 0)
+        lift = st.get('lift_s', max(0, -ys * 0.9))          # a hop / rise lifts the feet off the ground too (the shadow stays on the floor)
+        return Pose(weapon=a_use, lean=st.get('lean_s', (10 if not u else -4) * k), crouch=st.get('crouch_s', 1 if not d else 4), x=lunge, y=ys,
+                    leg_f=st.get('leg_f_s', 26 if not u else 6), leg_b=st.get('leg_b_s', -24 if not u else -6), lift_f=lift, lift_b=(lift * 1.15 if lift else (0 if not u else 2)),
+                    arm_f=a_use, arm_b=70 if not two else a_use + 20, two_hand=two, face='yell', sway=9 * k, strike=1, heavy=heavy, kind='atk',
+                    roll=st.get('spin_s'))
+    yr = st.get('y_r', 0)
+    return Pose(weapon=a_use + st.get('after', 28 if not heavy else 44), lean=st.get('lean_r', 3), crouch=2, x=st.get('x_r', 2 * k), y=yr,
+                lift_f=max(0, -yr * 0.9), lift_b=max(0, -yr * 1.0), leg_f=14, leg_b=-10, arm_f=a_use + 40, arm_b=100, sway=4, strike=0, heavy=heavy, kind='atk', roll=st.get('spin_r'))
 
 
 # ------------------------------------------------------------------ sheet
-def build_sheet(cfg, dress, weapon, style=None):
+def build_sheet(cfg, dress, weapon, style=None, atk_style=None):
     sheet = Image.new('RGBA', (W * FRAME_COLS, H * FRAME_ROWS), (0, 0, 0, 0))
 
     def put(idx, img):
@@ -403,7 +434,7 @@ def build_sheet(cfg, dress, weapon, style=None):
         put(32 + i, render(cfg, dress, weapon, pose_dodge_roll(i), style))
     for k, name in enumerate(ATTACK_ORDER):
         for ph in range(3):
-            put(40 + k * 3 + ph, render(cfg, dress, weapon, pose_attack(name, ph, weapon), style))
+            put(40 + k * 3 + ph, render(cfg, dress, weapon, pose_attack(name, ph, weapon, atk_style), style))
     return sheet
 
 
