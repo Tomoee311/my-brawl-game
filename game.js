@@ -278,10 +278,12 @@ const AttackRouter = {
     else variant = dir;
     return input.attack + '_' + variant;
   },
-  getAttackData(p, type) {
+  // stage = multi-hit stage (0 = first hit). The fighter's own attack style (char.moves, see moves.js) is applied on top of the weapon table.
+  getAttackData(p, type, stage) {
     const weaponId = p && (p.equippedWeapon || p.weaponId);
     let atk = weaponId && typeof WEAPONS !== 'undefined' && WEAPONS[weaponId] && WEAPONS[weaponId].attacks[type];
     if (!atk) atk = ATTACKS[type] || ATTACKS.light_n;
+    if (p && p.char && typeof applyMoves === 'function') atk = applyMoves(p.char, weaponId, type, atk, stage);
     const stats = p && p.char && p.char.stats;
     if (!stats) return atk;
 
@@ -584,6 +586,7 @@ function resetPlayerState(p) {
   endDodge(p, false);
   p.jumpsLeft = MAX_JUMPS;
   p.airDashes = AIR_DASHES_BASE;
+  p.recoveryUsed = false;
   p.attack = newAttackState();
   p.cooldown = 0;
   p.dropBuffer = 0;
@@ -902,6 +905,7 @@ function makePlayer(scene, x, y, char, keys, useMouse) {
     attackBuffer: null, animKey: 'idle',
     jumpsLeft: MAX_JUMPS,
     airDashes: AIR_DASHES_BASE,
+    recoveryUsed: false,       // heavy-up boost (moves.js airOnce) already used in this airtime
     attack: newAttackState(),
     cooldown: 0,
     hitFlash: 0,
@@ -991,7 +995,7 @@ function endDodge(p, withCooldown) {
 }
 
 function newAttackState() {
-  return { state: 'none', type: 'light_n', frame: 0, hitList: [], back: false };
+  return { state: 'none', type: 'light_n', frame: 0, hitList: [], back: false, stage: 0, refunded: false, boosting: false, diving: false };
 }
 
 function readInput(p) {
@@ -1222,6 +1226,7 @@ function simulate(time, dt) {
     if (onFloor && body.velocity.y >= 0) {
       p.jumpsLeft = MAX_JUMPS;
       p.airDashes = AIR_DASHES_BASE;
+      p.recoveryUsed = false;
     }
 
     // ---- Hitstun: can't jump/attack/move while stunned ----
@@ -1278,6 +1283,11 @@ function simulate(time, dt) {
         p.sprite.setVelocityX(body.velocity.x * 0.8);
         if (Math.abs(body.velocity.x) < 10) p.sprite.setVelocityX(0);
       }
+    }
+
+    // ---- Lunge (moves.js `lunge`): dash strikes / shoulder charges move the fighter forward while the hit is active ----
+    if (attacking && !stunned && !dodging && atk && atk.lunge && p.attack.state === 'active') {
+      p.sprite.setVelocityX(p.facing * (p.attack.back ? -1 : 1) * atk.lunge);
     }
 
     // ---- Dropping through a platform (one-way only; solid platforms ignore S) ----
@@ -1340,6 +1350,22 @@ function simulate(time, dt) {
 }
 
 // Attack state machine: none -> startup -> active -> recovery -> none
+// Motion that belongs to an attack: heavy-up boost (the fighter rises), dive (driven downward), see moves.js
+function applyAttackMotion(p, a, atk) {
+  const body = p.sprite.body;
+  if (a.boosting) {
+    const k = Math.max(0.35, 1 - a.frame / (atk.active * 1.5));
+    p.sprite.setVelocityY(Math.min(body.velocity.y, -atk.boost * k));
+    // a diagonal (W+A / W+D) recovery also drifts sideways: toward the held side (back attacks drift backward)
+    const bx = (atk.boostX || 0) + (atk.diag ? 230 : 0);
+    if (bx) p.sprite.setVelocityX(p.facing * (a.back ? -1 : 1) * bx);
+  }
+  if (a.diving) {
+    p.sprite.setVelocityY(Math.max(body.velocity.y, atk.dive));
+    p.sprite.setVelocityX(atk.diag ? p.facing * (a.back ? -1 : 1) * 260 : body.velocity.x * 0.7);   // a diagonal dive travels toward the held side
+  }
+}
+
 function updateAttack(p, input, onFloor, facingBefore) {
   const a = p.attack;
   const prevFacing = facingBefore || p.facing;
@@ -1373,6 +1399,10 @@ function updateAttack(p, input, onFloor, facingBefore) {
       a.type = id;
       a.frame = 0;
       a.hitList = [];
+      a.stage = 0;
+      a.refunded = false;
+      a.boosting = false;
+      a.diving = false;
       a.back = !!AttackRouter.getAttackData(p, id).back;
     }
     return;
@@ -1380,6 +1410,7 @@ function updateAttack(p, input, onFloor, facingBefore) {
 
   const atk = AttackRouter.getAttackData(p, a.type);
   a.frame++;
+  if (a.state === 'active') applyAttackMotion(p, a, atk);
 
   if (a.state === 'startup' && a.frame >= atk.startup) {
     a.state = 'active';
@@ -1394,14 +1425,37 @@ function updateAttack(p, input, onFloor, facingBefore) {
       VfxMgr.spearDust(p.sprite.x + p.facing * 28, p.sprite.body.bottom - 4);
     }
 
+    // heavy-up boost / dive (moves.js): from the ground a boost is always allowed, in the air only once until you land or hit someone
+    if (atk.boost && (onFloor || !atk.airOnce || !p.recoveryUsed)) {
+      a.boosting = true;
+      if (!onFloor && atk.airOnce) p.recoveryUsed = true;
+    }
+    if (atk.dive && !onFloor) a.diving = true;
+    applyAttackMotion(p, a, atk);
+
     // Gun projectile spawn
     if (atk.projectile && typeof spawnGunShot === 'function') {
       spawnGunShot(p, atk);
     }
   } else if (a.state === 'active') {
     if (!atk.projectile) {
-      if (typeof playSlashTrail === 'function') playSlashTrail(p, atk);
+      // multi-hit: at each stage frame the hit list resets so the same enemy can be hit again (see moves.js `stages`)
+      let cur = atk;
+      if (atk.stageCount && typeof stageAtFrame === 'function') {
+        const idx = stageAtFrame(atk, p.char, p.equippedWeapon || p.weaponId, a.type, a.frame);
+        if (idx !== a.stage) {
+          a.stage = idx;
+          a.hitList = [];
+          if (typeof playAttackJuice === 'function') playAttackJuice(p, AttackRouter.getAttackData(p, a.type, idx));
+        }
+        cur = AttackRouter.getAttackData(p, a.type, a.stage);
+      }
+      if (typeof playSlashTrail === 'function') playSlashTrail(p, cur);
       checkHits(p);
+    } else if (atk.burst && atk.burstGap && a.frame % atk.burstGap === 0 && a.frame / atk.burstGap < atk.burst) {
+      // gun double-tap / burst: another shot every burstGap frames
+      if (typeof playAttackJuice === 'function') playAttackJuice(p, atk);
+      if (typeof spawnGunShot === 'function') spawnGunShot(p, atk);
     }
     if (a.frame >= atk.active) {
       a.state = 'recovery';
@@ -1423,7 +1477,7 @@ function updateAttack(p, input, onFloor, facingBefore) {
 // (Arcade physics only supports AABB, so a long 45-degree box is approximated with a chain of squares)
 // sign = attack direction (for a back attack, behind the character)
 function getHitboxes(p) {
-  const atk = AttackRouter.getAttackData(p, p.attack.type);
+  const atk = AttackRouter.getAttackData(p, p.attack.type, p.attack.stage);
   // compute the hitbox from the middle of the body: sprite.y is the frame center, so with a large sheet it sat 30px+ too high and missed enemies
   const s = { x: p.sprite.body.center.x, y: p.sprite.body.center.y, body: p.sprite.body };
   const sign = p.facing * (p.attack.back ? -1 : 1);
@@ -1496,18 +1550,37 @@ function isAirborne(p) {
 
 // On hit: increase damage % -> compute knockback -> apply hitstun
 function onHit(attacker, target, customAtk) {
-  const atk = customAtk || AttackRouter.getAttackData(attacker, attacker.attack.type);
+  const atk = customAtk || AttackRouter.getAttackData(attacker, attacker.attack.type, attacker.attack.stage);
   if (!atk) return;
 
+  // super armor (moves.js `armor`): a target in the startup / active frames of an armored attack takes reduced damage but is not launched
+  let absorb = 0;
+  const ta = target.attack;
+  if (ta && (ta.state === 'startup' || ta.state === 'active') && !(customAtk && customAtk.thrown)) {
+    const td = AttackRouter.getAttackData(target, ta.type, ta.stage);
+    if (td && td.armor) absorb = td.armor;
+  }
+
   // 1) increase damage %
-  target.damage += atk.damage;
+  target.damage += absorb ? Math.max(1, Math.round(atk.damage * absorb)) : atk.damage;
 
   if (typeof Tutorial !== 'undefined' && Tutorial.active) Tutorial.onHit(attacker, target, customAtk, isAirborne(attacker));
 
   // 1b) hitting an enemy while the attacker is in the air refunds one air dash AND one jump per hit (thrown weapons don't count)
-  if (!(customAtk && customAtk.thrown) && isAirborne(attacker)) {
+  // (a multi-hit attack gives the bonus once, not once per hit)
+  if (!(customAtk && customAtk.thrown) && isAirborne(attacker) && !(!customAtk && attacker.attack.refunded)) {
     attacker.airDashes = Math.min(AIR_DASHES_MAX, attacker.airDashes + 1);
     attacker.jumpsLeft = Math.min(MAX_JUMPS, attacker.jumpsLeft + 1);   // an air hit also gives one jump back
+    attacker.recoveryUsed = false;                                       // ...and the heavy-up boost again
+    if (!customAtk) attacker.attack.refunded = true;
+  }
+
+  if (absorb) {   // armored: no knockback, no hitstun, the target keeps attacking
+    target.hitFlash = 4;
+    if (typeof VfxMgr !== 'undefined') {
+      VfxMgr.burst(target.sprite.x, target.sprite.body.center.y - 4, false, null);
+    }
+    return;
   }
 
   // 2) knockback force (accounts for target weight)
@@ -1521,14 +1594,21 @@ function onHit(attacker, target, customAtk) {
   } else if (attacker.attack.back) {
     sign = -attacker.facing;
   }
+  if (atk.radial && !customAtk) sign = target.sprite.x >= attacker.sprite.x ? 1 : -1;   // spins / slams push away from the attacker
   const rad = Phaser.Math.DegToRad(atk.angle);
-  target.sprite.setVelocity(
-    sign * Math.cos(rad) * kb,
-    -Math.sin(rad) * kb
-  );
+  if (atk.pull) {
+    // hook: drag the enemy TOWARD the attacker (a little lift so they slide across the floor)
+    const toward = attacker.sprite.x >= target.sprite.x ? 1 : -1;
+    target.sprite.setVelocity(toward * atk.pull, -(atk.pullLift || 120));
+  } else {
+    target.sprite.setVelocity(
+      sign * Math.cos(rad) * kb,
+      -Math.sin(rad) * kb
+    );
+  }
 
   // 4) hitstun
-  target.hitstun = Math.min(HITSTUN_MAX, Math.round(HITSTUN_BASE + kb * HITSTUN_PER_KB));
+  target.hitstun = atk.pull ? 16 : Math.min(HITSTUN_MAX, Math.round(HITSTUN_BASE + kb * HITSTUN_PER_KB));
 
   // 5) the victim's attack is interrupted
   endDodge(target, true);

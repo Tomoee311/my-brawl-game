@@ -1,0 +1,131 @@
+// moves.js - every fighter's own attack style.
+//
+// A weapon's attack table (weapons.js) gives the BASE numbers for e.g. "katana light_n". A fighter can override any of them with
+// `moves` in characters.js:   moves: { katana: { light: {...}, heavy_s: {...} }, gun: {...}, unarmed: {...} }
+// The override keys go from general to specific and are applied in this order:
+//      light / heavy   ->   light_u / heavy_df ... (one direction: n s d u uf ub df db)   ->   the full attack id (light_u_tilt, heavy_uf_g ...)
+//
+// Fields an override can use
+//   plain numbers  startup active recovery cooldown damage baseKb growth angle width height ox oy moveMult len size projSpeed projLife projAngle
+//   multipliers    dmg (damage) | kb (knockback) | reach (hitbox length) | tall (hitbox height) | speed (<1 = faster startup + recovery)
+//   new mechanics  lunge      forward speed (px/s) while the hit is active  -> a dash strike / shoulder charge
+//                  stages     [{ at: frame, ...overrides }]  -> multi-hit: at each `at` frame of the active window the hit list resets,
+//                             so the same enemy can be hit again (every stage can change damage / hitbox / angle)
+//                  armor      0..1  damage multiplier taken while this attack is in startup/active: you are NOT knocked back (super armor)
+//                  boost / boostX        the fighter rises with the attack (px/s up / forward): Brawlhalla-style recovery on heavy-up.
+//                                        airOnce: true = in the air it works once until you land or hit an enemy (always works from the ground)
+//                  dive       in the air the fighter is driven downward (px/s): dive slashes / ground pounds
+//                  pull / pullLift       a hit drags the enemy TOWARD the attacker (px/s, + a little lift) instead of launching them away: hooks
+//                  radial     true -> knockback pushes the enemy away from the attacker (spins / ground slams), not just forward
+//                  shots / spread        gun: pellets per shot and the angle between them (degrees)
+//                  burst / burstGap      gun: extra shots after the first one every burstGap frames (double tap)
+//
+// Everything is plain data + deterministic maths, so online matches stay in sync.
+
+const MOVE_NUM_FIELDS = ['startup', 'active', 'recovery', 'cooldown', 'damage', 'baseKb', 'growth', 'angle', 'width', 'height', 'ox', 'oy',
+  'moveMult', 'len', 'size', 'projSpeed', 'projLife', 'projAngle', 'lunge', 'armor', 'radial', 'shots', 'spread', 'burst', 'burstGap',
+  'boost', 'boostX', 'airOnce', 'dive', 'pull', 'pullLift'];
+
+function moveKeyChain(type) {
+  const kind = type.indexOf('heavy') === 0 ? 'heavy' : 'light';
+  const dir = (type.split('_')[1]) || 'n';
+  const chain = [kind, kind + '_' + dir, type];
+  return chain.filter((k, i) => chain.indexOf(k) === i);   // never apply the same key twice
+}
+
+// Diagonal attacks (up-forward / up-back / down-forward / down-back) inherit the MOVEMENT parts of the straight-up / straight-down move,
+// so W+A / W+D + heavy in the air is a directional recovery boost, and S+A / S+D + heavy is a directional dive (Brawlhalla-style).
+// They do NOT inherit the hitbox shape or knockback angle (a diagonal keeps its own 45-degree shape).
+const DIAG_INHERIT = ['boost', 'boostX', 'airOnce', 'dive', 'armor', 'radial', 'lunge', 'pull', 'pullLift', 'startup', 'active', 'recovery', 'cooldown', 'dmg', 'kb', 'speed'];
+
+function diagParent(type) {
+  const kind = type.indexOf('heavy') === 0 ? 'heavy' : 'light';
+  const dir = (type.split('_')[1]) || 'n';
+  if (dir === 'uf' || dir === 'ub') return kind + '_u';
+  if (dir === 'df' || dir === 'db') return kind + '_d';
+  return null;
+}
+
+function inheritedMove(o) {
+  const r = {};
+  DIAG_INHERIT.forEach((k) => { if (o[k] !== undefined) r[k] = o[k]; });
+  if (o.stages) {
+    r.stages = o.stages.map((s) => {
+      const c = {};
+      Object.keys(s).forEach((k) => { if (k === 'at' || DIAG_INHERIT.indexOf(k) !== -1) c[k] = s[k]; });
+      return c;
+    });
+  }
+  return r;
+}
+
+// apply ONE override object on a copy of the attack
+function mergeMove(atk, o) {
+  const out = Object.assign({}, atk);
+  Object.keys(o).forEach((k) => {
+    if (MOVE_NUM_FIELDS.indexOf(k) !== -1) out[k] = o[k];
+  });
+  if (o.dmg) out.damage = Math.max(1, Math.round(out.damage * o.dmg));
+  if (o.kb) { out.baseKb = Math.round(out.baseKb * o.kb); out.growth = Math.round(out.growth * o.kb * 10) / 10; }
+  if (o.reach) {
+    if (out.diag) out.len = Math.round(out.len * o.reach);
+    else out.width = Math.round(out.width * o.reach);
+  }
+  if (o.tall) {
+    if (out.diag) out.size = Math.round(out.size * o.tall);
+    else out.height = Math.round(out.height * o.tall);
+  }
+  if (o.speed) {
+    out.startup = Math.max(2, Math.round(out.startup * o.speed));
+    out.recovery = Math.max(3, Math.round(out.recovery * o.speed));
+  }
+  return out;
+}
+
+// Returns the attack data for this fighter + weapon + attack id (+ multi-hit stage). Cached: the inputs never change during a match.
+function applyMoves(char, weaponId, type, atk, stage) {
+  const set = char && char.moves && char.moves[weaponId || 'unarmed'];
+  if (!set || !type) return atk;
+  const cache = char._moveCache || (char._moveCache = {});
+  const key = (weaponId || 'unarmed') + '|' + type;
+  let entry = cache[key];
+  if (!entry || entry.base !== atk) {
+    let out = atk;
+    let stages = null;
+    const parent = diagParent(type);
+    moveKeyChain(type).forEach((k, i) => {
+      if (i === 1 && parent && set[parent]) {          // after the general kind key, before this diagonal's own keys
+        const inh = inheritedMove(set[parent]);
+        out = mergeMove(out, inh);
+        if (inh.stages) stages = inh.stages;
+      }
+      if (set[k]) {
+        out = mergeMove(out, set[k]);
+        if (set[k].stages) stages = set[k].stages;
+      }
+    });
+    entry = { base: atk, atk: out, stageAt: [0], stageData: [out] };
+    if (stages && stages.length) {
+      entry.stageAt = stages.map((s) => s.at || 0);
+      entry.stageData = stages.map((s) => mergeMove(out, s));
+      entry.atk = entry.stageData[0];
+      entry.stageData[0] = entry.atk;
+      entry.atk.stageCount = stages.length;
+      entry.stageData.forEach((d) => { d.stageCount = stages.length; });
+    }
+    cache[key] = entry;
+  }
+  if (stage && entry.stageData[stage]) return entry.stageData[stage];
+  return entry.atk;
+}
+
+// which stage is active `frame` frames after the hit became active
+function stageAtFrame(atk, char, weaponId, type, frame) {
+  const set = char && char.moves && char.moves[weaponId || 'unarmed'];
+  if (!set || !atk || !atk.stageCount) return 0;
+  const entry = char._moveCache && char._moveCache[(weaponId || 'unarmed') + '|' + type];
+  if (!entry) return 0;
+  let idx = 0;
+  for (let i = 0; i < entry.stageAt.length; i++) if (frame >= entry.stageAt[i]) idx = i;
+  return idx;
+}

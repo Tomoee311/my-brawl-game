@@ -590,7 +590,16 @@ function tickThrownWeapons() {
 }
 
 // Gun projectile spawning
+// One or several bullets per shot (moves.js: shots + spread = shotgun fan)
 function spawnGunShot(attacker, atk) {
+  const n = Math.max(1, (atk && atk.shots) || 1);
+  for (let i = 0; i < n; i++) {
+    const off = n > 1 ? (i - (n - 1) / 2) * ((atk && atk.spread) || 10) : 0;
+    spawnOneBullet(attacker, off === 0 ? atk : Object.assign({}, atk, { projAngle: ((atk && atk.projAngle) || 0) + off }));
+  }
+}
+
+function spawnOneBullet(attacker, atk) {
   const key = 'wpn_bullet';
   // for a back attack (UB/DB), the bullet goes backward
   const back = !!(attacker.attack && attacker.attack.back);

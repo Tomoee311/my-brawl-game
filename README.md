@@ -19,6 +19,28 @@ Phaser 3 platform fighter (Brawlhalla style). Modes: **Friends** (same PC), **Bo
 | Hla - The Storm Bell | spear | mid-range zoner |
 | Kan - The Crimson Ronin | axe + gun | rushdown |
 
+## Attack styles (every fighter fights differently)
+The weapon tables in `weapons.js` give the base numbers; each fighter's own style is in `moves` inside `characters.js` and is merged on top by `moves.js`
+(multi-hit stages, lunges, super armor, spins, shotgun fans, double taps). The sprite poses (`tools/fighters*.py`) and effects (`HERO_SWING` in `juice.js`) match.
+
+| Fighter | Light | Heavy |
+|---|---|---|
+| Zayar | katana: quick 2-hit slash, gun: double tap | katana: dash-draw slash (lunge), gun: fast strong shot |
+| Sandar | katana: wide crescent sweep | katana / spear: spinning 2-hit sweep (hits both sides) |
+| Weikza | spear: poke + mist burst further ahead | spear: poke + big burst, gun: 3-pellet fan |
+| Sithu | deliberate sword / axe strikes | overhead royal strike with super armor |
+| Thura | sword: 3-hit flurry, spear: staff spin | sword: rising dragon uppercut, spear: flame thrust |
+| Padamya | orbiting ring, 3 hits | boomerang ring, hits going out and coming back |
+| Thaung | shoulder charge (lunge) | ground slam shockwave on both sides, super armor |
+| Hla | very fast long jabs | long lunging thunder thrust |
+| Kan | forward 2-hit axe chain, shotgun pair | spinning cog (3 hits), 4-pellet close-range burst |
+
+**Brawlhalla-style signatures** (every fighter has their own version): side heavy = dash-in strike (`lunge`) or a hook that drags the enemy in (`pull`: Sandar's and Weikza's spears);
+heavy up = a rising strike that boosts the fighter upward (`boost`; in the air it works once per airtime until you land or hit someone: a recovery);
+heavy down = a dive / ground pound (`dive`); heavy neutral = the fighter's signature (spin, boomerang ring, ground slam, mist burst...).
+
+Run all checks: `node tests/load.test.js`, `moves.test.js`, `fighters.test.js`, `effects.test.js`, `net.test.js`, `peer-flow.test.js`.
+
 ## Controls (default - all rebindable in Lobby > Settings, keyboard and mouse)
 | | Player 1 | Player 2 |
 |---|---|---|

@@ -63,6 +63,21 @@ const Tutorial = {
         en: () => `Heavy attack ${T.K('heavy')}: slower, but it hits harder and sends the enemy farther. Hit the dummy 2 times.`,
         my: () => `Heavy attack ${T.K('heavy')} က နှေးပေမယ့် ပိုအားကောင်းပြီး ရန်သူကို ပိုလွင့်စေပါတယ်။ ၂ ချက်ထိပါ။`,
         hit(a, t, c) { if (a === T.p && isMelee(c) && type(a).startsWith('heavy')) T.inc(); } },
+      { title: 'DASH-IN HEAVY', goal: 1,
+        en: () => `Hold ${T.K('left')} or ${T.K('right')} and press the heavy attack ${T.K('heavy')}: most fighters LUNGE forward with their side heavy (a dash-in strike). Hit the dummy with one.`,
+        my: () => `${T.K('left')} (သို့) ${T.K('right')} ကိုင်ပြီး heavy attack ${T.K('heavy')} နှိပ်ပါ။ ဇာတ်ကောင်အများစုက side heavy မှာ ရှေ့ကို ခုန်ဝင်ပြီး ထိုးပါတယ် (dash-in)။ ရန်သူကို တစ်ချက်ထိပါ။`,
+        hit(a, t, c) { if (a === T.p && isMelee(c) && /^heavy_s/.test(type(a))) T.inc(); } },
+      { title: 'HEAVY UP BOOST', goal: 1,
+        en: () => `Jump, then hold ${T.K('up')} (or ${T.K('up')} + ${T.K('left')} / ${T.K('right')} for a diagonal boost toward that side) and press heavy ${T.K('heavy')} IN THE AIR: your fighter rises with the attack (a recovery boost, like Brawlhalla). It works once per airtime - land or hit an enemy to get it back. Great for getting back to the stage!`,
+        my: () => `ခုန်ပြီး လေထဲမှာ ${T.K('up')} ကိုင်ကာ (ဒါမှမဟုတ် ${T.K('up')} + ${T.K('left')} / ${T.K('right')} ထောင့်ဖြတ်နဲ့ ထိုးဘက်ကို ဆွဲတက်ပြီး) heavy ${T.K('heavy')} နှိပ်ပါ။ ဇာတ်ကောင်က attack နဲ့အတူ အပေါ်ကို တက်သွားပါမယ် (recovery boost)။ လေထဲမှာ တစ်ခါပဲ သုံးလို့ရပြီး မြေကိုထိရင် (သို့) ရန်သူကို ထိရင် ပြန်ရပါတယ်။ stage ပေါ်ပြန်တက်ဖို့ အသုံးဝင်ပါတယ်။`,
+        poll(p) {
+          const a = p.attack;
+          if (a.state === 'active' && a.boosting && !p.sprite.body.blocked.down && !T.st.boosted) { T.st.boosted = true; T.inc(); }
+        } },
+      { title: 'HOOK, DIVE & SPECIAL HEAVIES', goal: 1,
+        en: () => `Every fighter has their own heavy attacks: hold ${T.K('down')} + heavy in the air for a DIVE, and some spear fighters (Sandar, Weikza) have a HOOK that drags the enemy toward you. Try a heavy down attack in the air and hit the dummy.`,
+        my: () => `ဇာတ်ကောင်တိုင်းမှာ ကိုယ်ပိုင် heavy တွေရှိပါတယ်။ လေထဲမှာ ${T.K('down')} + heavy နှိပ်ရင် အောက်ကို dive ထိုးဆင်းပါတယ်။ လှံသုံးတဲ့ Sandar၊ Weikza တို့မှာ ရန်သူကို ကိုယ့်ဘက်ဆွဲခေါ်တဲ့ hook ပါပါတယ်။ လေထဲက heavy down နဲ့ ရန်သူကို ထိကြည့်ပါ။`,
+        hit(a, t, c, air) { if (a === T.p && isMelee(c) && /^heavy_d/.test(type(a))) T.inc(); } },
       { title: 'UP ATTACK', goal: 1,
         en: () => `Hold ${T.K('up')} and press an attack to strike upward. Hit the dummy with an up attack.`,
         my: () => `${T.K('up')} ကိုင်ပြီး attack နှိပ်ရင် အပေါ်ကိုထိုးပါတယ်။ အပေါ်ထိုး attack နဲ့ ရန်သူကိုထိပါ။`,

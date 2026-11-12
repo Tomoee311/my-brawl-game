@@ -10,6 +10,11 @@ const CHAR_SHEET_COLS = 8;
 // false = use only the procedurally drawn art
 const USE_SPRITE_SHEETS = true;
 
+// ---------- Attack styles ----------
+// Every fighter has their own `moves` (merged on top of the weapon's attack table by moves.js - see that file for all fields).
+// sig('heavy', {...}) = the same override for the neutral and the side version of that attack (the signature move).
+const sig = (kind, o) => { const r = {}; r[kind + '_n'] = o; r[kind + '_s'] = o; return r; };
+
 const CHARACTERS = {
   dante: {
     id: 'dante',
@@ -25,6 +30,17 @@ const CHARACTERS = {
     accent: 0xdfe9f7,   // Silver-white hair
     visualStyle: 'dante',
     weaponPool: ['katana', 'gun'],
+    moves: {   // Zayar - night duelist: dash-draw, triple flash, rising slash (recovery), dive slash, gun recoil boost
+      katana: Object.assign(
+        { light: { active: 8, recovery: 10, stages: [{ at: 0, dmg: 0.8 }, { at: 4, dmg: 1.1, angle: 55, kb: 1.2 }] }, heavy: { dmg: 1.1 } },
+        sig('light', { lunge: 110 }),
+        { heavy_s: { startup: 13, active: 7, recovery: 24, lunge: 820, reach: 1.3, dmg: 1.25, kb: 1.15 } },
+        { heavy_n: { startup: 11, active: 9, recovery: 22, lunge: 200, stages: [{ at: 0, dmg: 0.5, kb: 0.6 }, { at: 3, dmg: 0.5, kb: 0.6 }, { at: 6, dmg: 0.9, kb: 1.2, angle: 55 }] } },
+        { heavy_u: { startup: 9, active: 10, recovery: 24, boost: 780, boostX: 110, airOnce: true, angle: 88, tall: 1.6, kb: 1.2, stages: [{ at: 0, dmg: 0.6 }, { at: 5, dmg: 0.9 }] } },
+        { heavy_d: { startup: 10, active: 9, recovery: 20, dive: 760, dmg: 1.2, kb: 1.2, tall: 1.2 } }
+      ),
+      gun: { light: { burst: 2, burstGap: 6, active: 9, dmg: 0.85 }, heavy: { dmg: 1.3, kb: 1.25, projSpeed: 1300, startup: 14 }, heavy_u: { boost: 500, airOnce: true, active: 8 } },
+    },
     stats: {
       moveSpeed: 330,
       jumpSpeed: 565,
@@ -51,6 +67,22 @@ const CHARACTERS = {
     accent: 0xe8c15a,   // Dark tied-back hair
     visualStyle: 'sekiro',
     weaponPool: ['katana', 'spear'],
+    moves: {   // Sandar - moon sweeps: crescent lights, moon dash, spinning sweep, spiral rise, crescent dive, spear hook that pulls enemies in
+      katana: Object.assign(
+        { light: { tall: 1.5, reach: 1.1, speed: 1.1, dmg: 1.15, kb: 1.1 } },
+        { heavy_s: { startup: 12, active: 8, recovery: 22, lunge: 620, reach: 1.15, tall: 1.5, dmg: 1.15, kb: 1.15 } },
+        { heavy_n: { radial: true, ox: 0, width: 130, height: 62, startup: 13, active: 10, recovery: 24, stages: [{ at: 0, dmg: 0.6, kb: 0.7, angle: 40 }, { at: 5, dmg: 1.0, kb: 1.15, angle: 50 }] } },
+        { heavy_u: { startup: 9, active: 10, recovery: 24, boost: 740, airOnce: true, radial: true, ox: 0, width: 80, height: 120, angle: 85, stages: [{ at: 0, dmg: 0.6, kb: 0.7 }, { at: 5, dmg: 0.9, kb: 1.2 }] } },
+        { heavy_d: { dive: 720, radial: true, ox: 0, width: 110, height: 70, dmg: 1.1 } }
+      ),
+      spear: Object.assign(
+        { light: { reach: 1.15, dmg: 1.05 } },
+        { heavy_s: { startup: 14, active: 7, recovery: 26, reach: 1.4, pull: 560, pullLift: 130, dmg: 0.7, kb: 0.5 } },
+        { heavy_n: { radial: true, ox: 0, width: 170, height: 44, startup: 15, active: 8, recovery: 26, stages: [{ at: 0, dmg: 0.55, kb: 0.7 }, { at: 4, dmg: 0.8, kb: 1.15 }] } },
+        { heavy_u: { startup: 10, active: 10, recovery: 24, boost: 760, airOnce: true, radial: true, ox: 0, width: 90, height: 120, angle: 85 } },
+        { heavy_d: { dive: 760 } }
+      ),
+    },
     stats: {
       moveSpeed: 295,
       jumpSpeed: 510,
@@ -79,6 +111,19 @@ const CHARACTERS = {
     accent: 0x7de0ff,   // Magenta gaung baung
     visualStyle: 'dante',           // procedural art used when no sheet exists
     weaponPool: ['spear', 'gun'],
+    moves: {   // Weikza - alchemist: hook that drags enemies in, mist bursts, levitating rise, shotgun-fan gun
+      spear: Object.assign(
+        { light: { active: 9, stages: [{ at: 0, dmg: 0.8 }, { at: 6, ox: 2.0, width: 70, height: 52, dmg: 0.8, kb: 0.9, angle: 32 }] } },
+        { heavy_s: { startup: 15, active: 7, recovery: 28, reach: 1.4, pull: 520, pullLift: 140, dmg: 0.7, kb: 0.4, angle: 20 } },
+        { heavy_n: { startup: 16, active: 12, recovery: 26, stages: [{ at: 0, dmg: 0.75 }, { at: 7, ox: 2.2, width: 96, height: 72, dmg: 1.1, kb: 1.15, angle: 45 }] } },
+        { heavy_u: { startup: 10, active: 11, recovery: 26, boost: 660, airOnce: true, angle: 88, tall: 1.5 } },
+        { heavy_d: { dive: 640, radial: true, ox: 0, width: 120, height: 70, dmg: 1.0 } }
+      ),
+      gun: {
+        light: { dmg: 0.8, startup: 8, projSpeed: 720 },
+        heavy: { shots: 3, spread: 11, dmg: 0.55, kb: 0.7, startup: 18, recovery: 28, projSpeed: 900, projLife: 34 },
+      },
+    },
     stats: {
       moveSpeed: 304,
       jumpSpeed: 548,
@@ -105,6 +150,22 @@ const CHARACTERS = {
     accent: 0x2a4fa8,   // Gold crest
     visualStyle: 'sekiro',
     weaponPool: ['sword', 'axe'],
+    moves: {   // Sithu - royal guard: armored charge and overhead strikes, rising slash, ground pound
+      sword: Object.assign(
+        { light: { speed: 1.1, dmg: 1.15, kb: 1.1, reach: 1.08 } },
+        { heavy_n: { startup: 17, active: 5, recovery: 28, dmg: 1.35, kb: 1.3, armor: 0.6, tall: 1.4 } },
+        { heavy_s: { startup: 14, active: 8, recovery: 26, lunge: 560, armor: 0.6, dmg: 1.25, kb: 1.3 } },
+        { heavy_u: { startup: 10, active: 10, recovery: 26, boost: 700, airOnce: true, angle: 85, tall: 1.5, dmg: 1.1, kb: 1.2 } },
+        { heavy_d: { dive: 800, radial: true, ox: 0, width: 150, height: 56, dmg: 1.2, kb: 1.2, armor: 0.6 } }
+      ),
+      axe: Object.assign(
+        { light: { dmg: 1.1, reach: 1.1 } },
+        { heavy_n: { startup: 21, active: 6, recovery: 32, reach: 1.3, dmg: 1.25, kb: 1.25, armor: 0.55 } },
+        { heavy_s: { startup: 18, active: 8, recovery: 30, lunge: 420, armor: 0.55, reach: 1.25, dmg: 1.25, kb: 1.3 } },
+        { heavy_u: { startup: 11, active: 11, recovery: 28, boost: 740, airOnce: true, radial: true, ox: 0, width: 100, height: 120, angle: 85 } },
+        { heavy_d: { dive: 860, radial: true, ox: 0, width: 170, height: 56, dmg: 1.3, kb: 1.25 } }
+      ),
+    },
     stats: {
       moveSpeed: 285,
       jumpSpeed: 500,
@@ -132,6 +193,23 @@ const CHARACTERS = {
     accent: 0xf0b030,
     visualStyle: 'sekiro',
     weaponPool: ['sword', 'spear'],
+    moves: {   // Thura - dragonfire monk: flurry, dragon uppercut (launches him too), flame dash, dragon ascent, meteor dive
+      sword: Object.assign(
+        { light: { active: 9, speed: 0.9, stages: [{ at: 0, dmg: 0.45, kb: 0.7 }, { at: 3, dmg: 0.45, kb: 0.7 }, { at: 6, dmg: 0.7, kb: 1.1 }] } },
+        { heavy_n: { startup: 13, active: 8, recovery: 26, boost: 560, airOnce: true, angle: 80, tall: 1.45, dmg: 1.15, kb: 1.35 } },
+        { heavy_s: { startup: 12, active: 7, recovery: 24, lunge: 700, reach: 1.2, dmg: 1.15, kb: 1.3, angle: 35 } },
+        { heavy_u: { startup: 9, active: 11, recovery: 26, boost: 840, boostX: 90, airOnce: true, angle: 88, tall: 1.7, dmg: 1.2, kb: 1.35 } },
+        { heavy_d: { dive: 840, radial: true, ox: 0, width: 140, height: 60, dmg: 1.2, kb: 1.2 } }
+      ),
+      spear: Object.assign(
+        {},
+        sig('light', { radial: true, ox: 0, width: 120, height: 38, startup: 8, active: 6, dmg: 0.95 }),
+        { heavy_n: { reach: 1.1, dmg: 1.1, angle: 62 } },
+        { heavy_s: { startup: 14, active: 7, recovery: 24, lunge: 600, reach: 1.2, dmg: 1.1, angle: 50 } },
+        { heavy_u: { startup: 10, active: 10, recovery: 24, boost: 760, airOnce: true, radial: true, ox: 0, width: 90, height: 120, angle: 85 } },
+        { heavy_d: { dive: 760 } }
+      ),
+    },
     stats: {
       moveSpeed: 306,
       jumpSpeed: 535,
@@ -157,6 +235,19 @@ const CHARACTERS = {
     accent: 0xf3d27a,
     visualStyle: 'sekiro',
     weaponPool: ['chakram'],
+    moves: {   // Padamya - lotus dancer: orbiting ring, boomerang ring, gliding dance, spiral rise, petal dive
+      chakram: Object.assign(
+        { light: { active: 9, stages: [{ at: 0, dmg: 0.5, kb: 0.7 }, { at: 3, dmg: 0.5, kb: 0.7 }, { at: 6, dmg: 0.65, kb: 1.0 }] } },
+        sig('light', { ox: 0.7, width: 70, height: 66, angle: 55 }),
+        { heavy_n: { startup: 12, active: 16, recovery: 18,
+          stages: [{ at: 0, ox: 1.0, width: 80, dmg: 0.6, kb: 0.7 }, { at: 5, ox: 2.3, width: 96, dmg: 0.6, kb: 0.7 }, { at: 11, ox: 1.0, width: 80, dmg: 1.1, kb: 1.25, angle: 50 }] } },
+        { heavy_s: { startup: 11, active: 12, recovery: 20, lunge: 460,
+          stages: [{ at: 0, ox: 0.9, width: 80, dmg: 0.6, kb: 0.6 }, { at: 5, ox: 1.4, width: 90, dmg: 0.6, kb: 0.6 }, { at: 9, ox: 1.8, width: 100, dmg: 1.0, kb: 1.25, angle: 45 }] } },
+        { heavy_u: { startup: 9, active: 11, recovery: 22, boost: 700, airOnce: true, angle: 88, radial: true, ox: 0, width: 90, height: 110,
+          stages: [{ at: 0, dmg: 0.5, kb: 0.6 }, { at: 5, dmg: 0.8, kb: 1.2 }] } },
+        { heavy_d: { dive: 640, radial: true, ox: 0, width: 130, height: 60, dmg: 1.0 } }
+      ),
+    },
     stats: {
       moveSpeed: 318,
       jumpSpeed: 552,
@@ -184,6 +275,16 @@ const CHARACTERS = {
     accent: 0xd99b35,    // Bronze gold
     visualStyle: 'sekiro',
     weaponPool: ['axe'],
+    moves: {   // Thaung - iron elephant: shoulder charge, armored bull charge, ground slam, heave, stomp dive
+      axe: Object.assign(
+        {},
+        sig('light', { lunge: 380, startup: 7, active: 6, recovery: 16, kb: 1.3, reach: 0.9, tall: 1.2 }),
+        { heavy_n: { radial: true, ox: 0, width: 210, height: 46, oy: 0.55, startup: 22, active: 6, recovery: 34, dmg: 1.3, kb: 1.2, angle: 65, armor: 0.5 } },
+        { heavy_s: { startup: 20, active: 9, recovery: 32, lunge: 720, armor: 0.5, dmg: 1.25, kb: 1.5, tall: 1.2, angle: 35 } },
+        { heavy_u: { startup: 14, active: 10, recovery: 28, boost: 600, airOnce: true, angle: 85, tall: 1.5, dmg: 1.2, kb: 1.4 } },
+        { heavy_d: { dive: 900, radial: true, ox: 0, width: 200, height: 50, dmg: 1.3, kb: 1.25 } }
+      ),
+    },
     stats: {
       moveSpeed: 255,
       jumpSpeed: 475,
@@ -210,6 +311,15 @@ const CHARACTERS = {
     accent: 0xffd447,    // Electric yellow
     visualStyle: 'sekiro',
     weaponPool: ['spear'],
+    moves: {   // Hla - storm bell: fast long jabs, thunder thrust, staff sweep, rising thrust, plunge
+      spear: Object.assign(
+        { light: { speed: 0.7, reach: 1.25, dmg: 0.85 } },
+        { heavy_s: { lunge: 650, reach: 1.45, dmg: 1.2, startup: 17, active: 6, recovery: 24, tall: 0.8 } },
+        { heavy_n: { radial: true, ox: 0, width: 160, height: 44, startup: 14, active: 8, recovery: 24, stages: [{ at: 0, dmg: 0.6, kb: 0.7 }, { at: 4, dmg: 0.8, kb: 1.1 }] } },
+        { heavy_u: { startup: 9, active: 11, recovery: 24, boost: 820, airOnce: true, angle: 88, tall: 1.8, reach: 0.8, dmg: 1.15, kb: 1.3 } },
+        { heavy_d: { dive: 820, dmg: 1.2 } }
+      ),
+    },
     stats: {
       moveSpeed: 300,
       jumpSpeed: 530,
@@ -235,6 +345,21 @@ const CHARACTERS = {
     accent: 0xf0e5d0,    // Bone white
     visualStyle: 'dante',
     weaponPool: ['axe', 'gun'],
+    moves: {   // Kan - rushdown: 2-hit axe chain, cog rush, cog spin, cog ascent, gear-drill dive, shotgun (also boosts upward)
+      axe: Object.assign(
+        {},
+        sig('light', { lunge: 240, startup: 6, active: 7, recovery: 12, stages: [{ at: 0, dmg: 0.6 }, { at: 4, dmg: 0.75, angle: 55 }] }),
+        { heavy_n: { radial: true, ox: 0, width: 140, height: 72, startup: 16, active: 12, recovery: 24, stages: [{ at: 0, dmg: 0.5, kb: 0.6 }, { at: 4, dmg: 0.5, kb: 0.6 }, { at: 8, dmg: 0.9, kb: 1.2 }] } },
+        { heavy_s: { radial: true, ox: 0, width: 130, height: 70, startup: 14, active: 12, recovery: 24, lunge: 520, stages: [{ at: 0, dmg: 0.5, kb: 0.6 }, { at: 4, dmg: 0.5, kb: 0.6 }, { at: 8, dmg: 0.9, kb: 1.2 }] } },
+        { heavy_u: { startup: 9, active: 11, recovery: 24, boost: 780, airOnce: true, angle: 88, radial: true, ox: 0, width: 90, height: 120, stages: [{ at: 0, dmg: 0.5, kb: 0.6 }, { at: 5, dmg: 0.8, kb: 1.2 }] } },
+        { heavy_d: { dive: 780, radial: true, ox: 0, width: 120, height: 66, dmg: 1.0 } }
+      ),
+      gun: {
+        light: { shots: 2, spread: 8, dmg: 0.7, projLife: 22, startup: 7 },
+        heavy: { shots: 4, spread: 10, dmg: 0.6, kb: 0.8, projLife: 20 },
+        heavy_u: { shots: 2, spread: 12, dmg: 0.6, boost: 560, airOnce: true, active: 8 },
+      },
+    },
     stats: {
       moveSpeed: 335,
       jumpSpeed: 555,
