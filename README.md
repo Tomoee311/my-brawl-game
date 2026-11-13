@@ -51,10 +51,14 @@ heavy down = a dive / ground pound (`dive`); heavy neutral = the fighter's signa
 | Constant | What it does | Now |
 |---|---|---|
 | `ATTACK_SLOWDOWN` (`moves.js`) | startup + recovery multiplier of every attack: `light` / `heavy` (bigger = slower) | 1.5 / 1.25 |
-| `LIGHT_MIN_CYCLE`, `COMBO_MIN_CYCLE`, `COMBO_FINISH_CYCLE` | shortest time between light attacks / combo hits / after the finisher (frames) | 38 / 22 / 46 |
+| `LIGHT_MIN_CYCLE`, `COMBO_MIN_CYCLE`, `COMBO_FINISH_CYCLE` | shortest time between light attacks / combo hits / after the finisher (frames) | 38 / 22 / 62 |
 | `GRAVITY_SCALE` | falling speed (1 = old, smaller = floatier). Jump height stays the same | 0.8 |
-| `FAST_FALL_SPEED` | speed when holding down while falling | 620 |
+| `FAST_FALL_SPEED` | speed when holding down while falling | 640 |
 | `DIVE_SCALE` | multiplier for dive attacks (heavy down in the air) | 0.85 |
+| `FALL_GRAVITY_MULT` | gravity while FALLING relative to rising (smaller = floatier descent) | 0.75 |
+| `NORMAL_FALL_CAP` | top speed of an ordinary fall (fast fall, dives and knockback are free) | 470 |
+| `LIGHT_HEAT` (`moves.js`) | anti-spam: every light adds heat, hot = longer recovery after each light | add 55 / free 70 |
+| `WHIFF_PENALTY` | extra recovery after a neutral / side light that hit nothing (the combo only continues after a HIT) | 8 |
 
 Run all checks: `node tests/load.test.js`, `moves.test.js`, `ledge.test.js`, `fighters.test.js`, `effects.test.js`, `net.test.js`, `peer-flow.test.js`.
 

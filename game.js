@@ -209,15 +209,18 @@ const AIR_DASHES_MAX = 3;
 const LIGHT_MIN_CYCLE = 38;
 
 // ---------- Brawlhalla-style movement ----------
-const FAST_FALL_SPEED = 620;        // hold down while falling (kept below ~720 px/s: faster could tunnel through a platform)
+const FAST_FALL_SPEED = 640;  // hold down while falling (kept below ~720 px/s: faster could tunnel through a platform)        // hold down while falling (kept below ~720 px/s: faster could tunnel through a platform)
 // Falling: GRAVITY_SCALE < 1 = floatier, slower falling. Jump speeds are scaled by its square root so jump HEIGHT stays the same.
 const GRAVITY_SCALE = 0.8;
 const JUMP_SCALE = Math.sqrt(GRAVITY_SCALE);
+const FALL_GRAVITY_MULT = 0.75;     // while FALLING gravity is this much of normal (rising stays 1.0): a floaty descent
+const NORMAL_FALL_CAP = 470;        // top speed of an ordinary fall (px/s). Fast fall, dives and knockback go faster
+const WHIFF_PENALTY = 8;            // extra recovery frames after a neutral / side light that hit nothing (and the combo ends)
 const DIVE_SCALE = 0.85;            // dive attacks (heavy down in the air) fall a little slower too
 const GRAVITY_CANCEL_FRAMES = 12;   // an air hit freezes your fall for this long (once per airtime - land to get it back)
 const COMBO_WINDOW = 34;            // frames after a light attack in which pressing light again continues the 3-hit combo
 const COMBO_MIN_CYCLE = 22;         // combo hits 2 and 3 follow up faster than a fresh light attack (LIGHT_MIN_CYCLE)
-const COMBO_FINISH_CYCLE = 46;      // ...but after the finisher you wait a bit
+const COMBO_FINISH_CYCLE = 62;      // ...but after the finisher you wait a bit
 const COMBO_BUFFER = 14;            // a light press this early before the next hit is remembered
 
 // ---------- Knockback / Hitstun ----------
@@ -604,7 +607,7 @@ function resetPlayerState(p) {
   p.recoveryUsed = false;
   if (p.ledge && p.sprite && p.sprite.body) p.sprite.body.setAllowGravity(true);
   p.ledge = null; p.ledgeLast = null; p.ledgeCooldown = 0; p.ledgeClimb = 0;
-  p.gcFrames = 0; p.gcUsed = false; p.fastFalling = false; p.comboIdx = 0; p.comboWindow = 0;
+  p.gcFrames = 0; p.gcUsed = false; p.fastFalling = false; p.comboIdx = 0; p.comboWindow = 0; p.lightHeat = 0;
   p.attack = newAttackState();
   p.cooldown = 0;
   p.dropBuffer = 0;
@@ -930,6 +933,8 @@ function makePlayer(scene, x, y, char, keys, useMouse) {
     gcFrames: 0, gcUsed: false,   // gravity cancel after an air hit
     fastFalling: false,
     comboIdx: 0, comboWindow: 0,   // light attack 3-hit combo
+    lightHeat: 0,                  // anti-spam heat (moves.js LIGHT_HEAT)
+    gravityBase: (stats.gravityBonus || 0) * GRAVITY_SCALE,
     attack: newAttackState(),
     cooldown: 0,
     hitFlash: 0,
@@ -1020,7 +1025,7 @@ function endDodge(p, withCooldown) {
 }
 
 function newAttackState() {
-  return { state: 'none', type: 'light_n', frame: 0, hitList: [], back: false, stage: 0, refunded: false, boosting: false, diving: false, combo: 0 };
+  return { state: 'none', type: 'light_n', frame: 0, hitList: [], back: false, stage: 0, refunded: false, boosting: false, diving: false, combo: 0, connected: false };
 }
 
 function readInput(p) {
@@ -1257,6 +1262,7 @@ function simulate(time, dt) {
     }
     if (p.ledgeCooldown > 0) p.ledgeCooldown--;
     if (p.ledgeClimb > 0) p.ledgeClimb--;
+    if (p.lightHeat > 0) p.lightHeat--;
 
     // ---- Hanging on a ledge: only ledge actions are possible ----
     if (p.ledge) {
@@ -1329,6 +1335,16 @@ function simulate(time, dt) {
     if (!onFloor && !stunned && !dodging && p.attack.state === 'none' && input.downHeld && body.velocity.y > 0 && p.gcFrames <= 0) {
       p.sprite.setVelocityY(Math.max(body.velocity.y, FAST_FALL_SPEED));
       p.fastFalling = true;
+    }
+
+    // ---- Falling feel: a floaty descent with a top speed (fast fall, dives and knockback are not capped) ----
+    if (!p.ledge && !p.dodge.active) {
+      const falling = !onFloor && body.velocity.y > 0;
+      body.setGravityY(p.gravityBase + (falling ? body.world.gravity.y * (FALL_GRAVITY_MULT - 1) : 0));
+      if (falling && !stunned && !p.fastFalling && !p.attack.diving && p.gcFrames <= 0) {
+        const vy = capFall(body.velocity.y, NORMAL_FALL_CAP, false);
+        if (vy !== body.velocity.y) p.sprite.setVelocityY(vy);
+      }
     }
 
     // ---- Gravity cancel: after an air hit the fall is frozen for a moment, so you can follow up ----
@@ -1515,7 +1531,7 @@ function applyAttackMotion(p, a, atk) {
 // can the next light press continue a combo? (the attack that is running / just ended was a neutral or side light that is not the finisher)
 function comboChainable(p) {
   const a = p.attack;
-  if (a.state !== 'none') return (a.type === 'light_n' || a.type === 'light_s') && (a.combo | 0) < 2;
+  if (a.state !== 'none') return (a.type === 'light_n' || a.type === 'light_s') && (a.combo | 0) < 2 && a.connected;
   return p.comboWindow > 0;
 }
 
@@ -1561,9 +1577,12 @@ function updateAttack(p, input, onFloor, facingBefore) {
       a.hitList = [];
       a.stage = 0;
       a.refunded = false;
+      a.connected = false;
       a.boosting = false;
       a.diving = false;
+      if (id.indexOf('light') === 0) p.lightHeat = Math.min(LIGHT_HEAT.cap, p.lightHeat + LIGHT_HEAT.add);
       a.back = !!AttackRouter.getAttackData(p, id).back;
+      if (AttackRouter.getAttackData(p, id).projectile) a.connected = true;   // gun lights: the bullet lands later, so the string is never cut short
     }
     return;
   }
@@ -1630,12 +1649,17 @@ function updateAttack(p, input, onFloor, facingBefore) {
       const used = atk.startup + atk.active + atk.recovery;
       const chain = (a.type === 'light_n' || a.type === 'light_s');
       let minCycle = LIGHT_MIN_CYCLE;
+      let extra = lightHeatExtra(p.lightHeat);                   // mashing the light button makes every next one slower
       if (chain) {
-        // 3-hit combo: hits 1 and 2 can be followed up quickly, the finisher makes you wait a little
-        if ((a.combo | 0) < 2) { minCycle = COMBO_MIN_CYCLE; p.comboWindow = COMBO_WINDOW; p.comboIdx = a.combo | 0; }
-        else { minCycle = COMBO_FINISH_CYCLE; p.comboIdx = 0; }
+        if ((a.combo | 0) >= 2) {                                // finisher: wait a while before the next string
+          minCycle = COMBO_FINISH_CYCLE; p.comboIdx = 0;
+        } else if (a.connected) {                                // it HIT: hits 1 and 2 can be followed up quickly
+          minCycle = COMBO_MIN_CYCLE; p.comboWindow = COMBO_WINDOW; p.comboIdx = a.combo | 0;
+        } else {                                                 // it missed: no combo, and a longer recovery
+          extra += WHIFF_PENALTY; p.comboIdx = 0; p.comboWindow = 0;
+        }
       }
-      p.cooldown = Math.max(Math.min(p.cooldown, minCycle), minCycle - used);
+      p.cooldown = Math.max(Math.min(p.cooldown, minCycle), minCycle - used) + extra;
     }
   }
 }
@@ -1748,6 +1772,8 @@ function onHit(attacker, target, customAtk) {
     attacker.sprite.setVelocityY(Math.min(attacker.sprite.body.velocity.y, 0));
     if (typeof VFX !== 'undefined') VFX.push({ type: 'ring', x: attacker.sprite.x, y: attacker.sprite.body.center.y, r0: 6, r1: 34, life: 9, width: 2, color: 0xffffff, age: 0 });
   }
+
+  if (!(customAtk && customAtk.thrown) && attacker.attack.state !== 'none') attacker.attack.connected = true;
 
   // a hit breaks the target's combo and knocks them off a ledge
   target.comboIdx = 0;

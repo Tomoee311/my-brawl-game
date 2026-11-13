@@ -4,9 +4,9 @@ const vm = require('vm');
 const path = require('path');
 const ctx = {};
 vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'moves.js'), 'utf8') + '\nthis.applyMoves = applyMoves; this.stageAtFrame = stageAtFrame; this.moveKeyChain = moveKeyChain; this.slowAttack = slowAttack; this.ATTACK_SLOWDOWN = ATTACK_SLOWDOWN;', ctx);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'moves.js'), 'utf8') + '\nthis.applyMoves = applyMoves; this.stageAtFrame = stageAtFrame; this.moveKeyChain = moveKeyChain; this.slowAttack = slowAttack; this.ATTACK_SLOWDOWN = ATTACK_SLOWDOWN; this.lightHeatExtra = lightHeatExtra; this.capFall = capFall; this.LIGHT_HEAT = LIGHT_HEAT;', ctx);
 const { applyMoves, stageAtFrame, moveKeyChain } = ctx;
-const { slowAttack, ATTACK_SLOWDOWN } = ctx;
+const { slowAttack, ATTACK_SLOWDOWN, lightHeatExtra, capFall, LIGHT_HEAT } = ctx;
 
 let fails = 0;
 const eq = (name, a, b) => { if (JSON.stringify(a) !== JSON.stringify(b)) { fails++; console.log('FAIL', name, 'got', JSON.stringify(a), 'expected', JSON.stringify(b)); } else console.log('ok  ', name); };
@@ -87,6 +87,19 @@ eq('heavy attacks are slowed less (x1.25)', [sh.startup, sh.recovery], [18, 15])
 const shared = Object.assign({}, base, { kind: 'light' });
 eq('slowAttack returns the same copy every time (cached)', slowAttack(shared) === slowAttack(shared), true);
 eq('slowAttack does not change the original', [shared.startup, shared.recovery], [6, 12]);
+
+// anti-spam heat
+eq('no penalty for a calm light attack', lightHeatExtra(0), 0);
+eq('no penalty up to the free amount', lightHeatExtra(LIGHT_HEAT.free), 0);
+eq('mashing adds recovery', lightHeatExtra(120) > 0, true);
+eq('the penalty is capped', lightHeatExtra(10000), LIGHT_HEAT.maxExtra);
+eq('a continuous light string (one light every 24 frames) reaches a penalty within 4 lights', (() => { let h = 0, extra = 0; for (let i = 0; i < 4; i++) { h = Math.min(LIGHT_HEAT.cap, h + LIGHT_HEAT.add); extra = lightHeatExtra(h); h = Math.max(0, h - 24); } return extra > 0; })(), true);
+eq('a relaxed light every 90 frames never gets a penalty', (() => { let h = 0, mx = 0; for (let i = 0; i < 20; i++) { h = Math.min(LIGHT_HEAT.cap, h + LIGHT_HEAT.add); mx = Math.max(mx, lightHeatExtra(h)); h = Math.max(0, h - 90); } return mx; })(), 0);
+// terminal fall speed
+eq('a normal fall is capped', capFall(900, 470, false), 470);
+eq('slow falls are untouched', capFall(300, 470, false), 300);
+eq('free (fast fall / knockback) is not capped', capFall(900, 470, true), 900);
+eq('rising is never touched', capFall(-600, 470, false), -600);
 
 if (fails) { console.log('\n' + fails + ' failed'); process.exit(1); }
 console.log('\nall moves tests passed');

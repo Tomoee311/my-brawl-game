@@ -99,6 +99,18 @@ function slowAttack(atk) {
   return s;
 }
 
+// Light-attack "heat" (anti-spam): every light attack adds LIGHT_HEAT.add frames of heat, heat drains 1 per frame. Above LIGHT_HEAT.free the
+// recovery after each light attack gets longer, so mashing the light button gets slower and slower while a calm string stays quick.
+const LIGHT_HEAT = { add: 55, free: 70, cap: 170, rate: 0.5, maxExtra: 45 };
+function lightHeatExtra(heat) {
+  return Math.min(LIGHT_HEAT.maxExtra, Math.max(0, Math.floor((heat - LIGHT_HEAT.free) * LIGHT_HEAT.rate)));
+}
+
+// Ordinary falling has a top speed; fast fall, dives, knockback and dodges are free to go faster.
+function capFall(vy, cap, free) {
+  return (!free && vy > cap) ? cap : vy;
+}
+
 // 3-hit light combo (Brawlhalla style): neutral / side light pressed again in time = hit 2, then hit 3 (the finisher).
 // Defaults for every fighter; a fighter can change them per weapon with  moves: { katana: { combo: [ {hit 2 overrides}, {hit 3 overrides} ] } }
 const COMBO_DEFAULT = [
