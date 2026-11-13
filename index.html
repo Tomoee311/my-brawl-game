@@ -42,6 +42,7 @@
   <script src="juice.js"></script>
   <script src="controls.js"></script>
   <script src="moves.js"></script>
+  <script src="ledge.js"></script>
   <script src="weapons.js"></script>
   <script src="characters.js"></script>
   <script src="charart.js"></script>
@@ -62,7 +63,8 @@
       const L = (pid, a) => Controls.label(pid, a);
       const two = SELECTION.mode === 'friends';
       let t = `P1 - Move: ${L('p1','left')} / ${L('p1','right')} &nbsp;|&nbsp; Up / Down: ${L('p1','up')} / ${L('p1','down')} &nbsp;|&nbsp; Jump: ${L('p1','jump')} &nbsp;|&nbsp; Dash: ${L('p1','dodge')}<br>` +
-        `Light: ${L('p1','light')} &nbsp;|&nbsp; Heavy: ${L('p1','heavy')} &nbsp;|&nbsp; Pick up / Throw (hold a direction to aim): ${L('p1','throw')}<br>`;
+        `Light: ${L('p1','light')} &nbsp;|&nbsp; Heavy: ${L('p1','heavy')} &nbsp;|&nbsp; Pick up / Throw (hold a direction to aim): ${L('p1','throw')}<br>` +
+        `Hold ${L('p1','down')} while falling = fast fall &nbsp;|&nbsp; Fall next to the stage edge = ledge grab (jump / attack / dodge to get up) &nbsp;|&nbsp; Light x3 = combo<br>`;
       if (two) t += `P2 - Move: ${L('p2','left')} / ${L('p2','right')} &nbsp;|&nbsp; Jump: ${L('p2','jump')} &nbsp;|&nbsp; Dash: ${L('p2','dodge')} &nbsp;|&nbsp; Light: ${L('p2','light')} &nbsp;|&nbsp; Heavy: ${L('p2','heavy')} &nbsp;|&nbsp; Pick up / Throw: ${L('p2','throw')}<br>`;
       t += 'F = fullscreen &nbsp;|&nbsp; H = show/hide this text &nbsp;|&nbsp; B = show/hide hitboxes &nbsp;|&nbsp; ESC = back to Lobby (Bot / Tutorial)';
       document.getElementById('help').innerHTML = t;

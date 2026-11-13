@@ -32,7 +32,7 @@ const CHARACTERS = {
     weaponPool: ['katana', 'gun'],
     moves: {   // Zayar - night duelist: dash-draw, triple flash, rising slash (recovery), dive slash, gun recoil boost
       katana: Object.assign(
-        { light: { active: 8, recovery: 10, stages: [{ at: 0, dmg: 0.8 }, { at: 4, dmg: 1.1, angle: 55, kb: 1.2 }] }, heavy: { dmg: 1.1 } },
+        { light: { dmg: 0.9 }, heavy: { dmg: 1.1 }, combo: [{ speed: 0.8, angle: 50 }, { lunge: 420, reach: 1.3, dmg: 2.0, kb: 1.7 }] },
         sig('light', { lunge: 110 }),
         { heavy_s: { startup: 13, active: 7, recovery: 24, lunge: 820, reach: 1.3, dmg: 1.25, kb: 1.15 } },
         { heavy_n: { startup: 11, active: 9, recovery: 22, lunge: 200, stages: [{ at: 0, dmg: 0.5, kb: 0.6 }, { at: 3, dmg: 0.5, kb: 0.6 }, { at: 6, dmg: 0.9, kb: 1.2, angle: 55 }] } },
@@ -69,14 +69,14 @@ const CHARACTERS = {
     weaponPool: ['katana', 'spear'],
     moves: {   // Sandar - moon sweeps: crescent lights, moon dash, spinning sweep, spiral rise, crescent dive, spear hook that pulls enemies in
       katana: Object.assign(
-        { light: { tall: 1.5, reach: 1.1, speed: 1.1, dmg: 1.15, kb: 1.1 } },
+        { light: { tall: 1.5, reach: 1.1, speed: 1.1, dmg: 1.15, kb: 1.1 }, combo: [{ tall: 1.3 }, { tall: 1.6, reach: 1.25, angle: 60, kb: 1.6, dmg: 1.8 }] },
         { heavy_s: { startup: 12, active: 8, recovery: 22, lunge: 620, reach: 1.15, tall: 1.5, dmg: 1.15, kb: 1.15 } },
         { heavy_n: { radial: true, ox: 0, width: 130, height: 62, startup: 13, active: 10, recovery: 24, stages: [{ at: 0, dmg: 0.6, kb: 0.7, angle: 40 }, { at: 5, dmg: 1.0, kb: 1.15, angle: 50 }] } },
         { heavy_u: { startup: 9, active: 10, recovery: 24, boost: 740, airOnce: true, radial: true, ox: 0, width: 80, height: 120, angle: 85, stages: [{ at: 0, dmg: 0.6, kb: 0.7 }, { at: 5, dmg: 0.9, kb: 1.2 }] } },
         { heavy_d: { dive: 720, radial: true, ox: 0, width: 110, height: 70, dmg: 1.1 } }
       ),
       spear: Object.assign(
-        { light: { reach: 1.15, dmg: 1.05 } },
+        { light: { reach: 1.15, dmg: 1.05 }, combo: [{ reach: 1.1 }, { reach: 1.4, kb: 1.5, dmg: 1.7 }] },
         { heavy_s: { startup: 14, active: 7, recovery: 26, reach: 1.4, pull: 560, pullLift: 130, dmg: 0.7, kb: 0.5 } },
         { heavy_n: { radial: true, ox: 0, width: 170, height: 44, startup: 15, active: 8, recovery: 26, stages: [{ at: 0, dmg: 0.55, kb: 0.7 }, { at: 4, dmg: 0.8, kb: 1.15 }] } },
         { heavy_u: { startup: 10, active: 10, recovery: 24, boost: 760, airOnce: true, radial: true, ox: 0, width: 90, height: 120, angle: 85 } },
@@ -113,7 +113,7 @@ const CHARACTERS = {
     weaponPool: ['spear', 'gun'],
     moves: {   // Weikza - alchemist: hook that drags enemies in, mist bursts, levitating rise, shotgun-fan gun
       spear: Object.assign(
-        { light: { active: 9, stages: [{ at: 0, dmg: 0.8 }, { at: 6, ox: 2.0, width: 70, height: 52, dmg: 0.8, kb: 0.9, angle: 32 }] } },
+        { light: { dmg: 0.9 }, combo: [{ speed: 0.85 }, { active: 9, stages: [{ at: 0, dmg: 0.7 }, { at: 4, ox: 2.1, width: 80, height: 60, dmg: 0.9, kb: 1.2, angle: 32 }] }] },
         { heavy_s: { startup: 15, active: 7, recovery: 28, reach: 1.4, pull: 520, pullLift: 140, dmg: 0.7, kb: 0.4, angle: 20 } },
         { heavy_n: { startup: 16, active: 12, recovery: 26, stages: [{ at: 0, dmg: 0.75 }, { at: 7, ox: 2.2, width: 96, height: 72, dmg: 1.1, kb: 1.15, angle: 45 }] } },
         { heavy_u: { startup: 10, active: 11, recovery: 26, boost: 660, airOnce: true, angle: 88, tall: 1.5 } },
@@ -152,14 +152,14 @@ const CHARACTERS = {
     weaponPool: ['sword', 'axe'],
     moves: {   // Sithu - royal guard: armored charge and overhead strikes, rising slash, ground pound
       sword: Object.assign(
-        { light: { speed: 1.1, dmg: 1.15, kb: 1.1, reach: 1.08 } },
+        { light: { speed: 1.1, dmg: 1.15, kb: 1.1, reach: 1.08 }, combo: [{}, { armor: 0.7, lunge: 260, kb: 1.8, dmg: 2.0 }] },
         { heavy_n: { startup: 17, active: 5, recovery: 28, dmg: 1.35, kb: 1.3, armor: 0.6, tall: 1.4 } },
         { heavy_s: { startup: 14, active: 8, recovery: 26, lunge: 560, armor: 0.6, dmg: 1.25, kb: 1.3 } },
         { heavy_u: { startup: 10, active: 10, recovery: 26, boost: 700, airOnce: true, angle: 85, tall: 1.5, dmg: 1.1, kb: 1.2 } },
         { heavy_d: { dive: 800, radial: true, ox: 0, width: 150, height: 56, dmg: 1.2, kb: 1.2, armor: 0.6 } }
       ),
       axe: Object.assign(
-        { light: { dmg: 1.1, reach: 1.1 } },
+        { light: { dmg: 1.1, reach: 1.1 }, combo: [{}, { armor: 0.7, lunge: 200, kb: 1.8, dmg: 2.0 }] },
         { heavy_n: { startup: 21, active: 6, recovery: 32, reach: 1.3, dmg: 1.25, kb: 1.25, armor: 0.55 } },
         { heavy_s: { startup: 18, active: 8, recovery: 30, lunge: 420, armor: 0.55, reach: 1.25, dmg: 1.25, kb: 1.3 } },
         { heavy_u: { startup: 11, active: 11, recovery: 28, boost: 740, airOnce: true, radial: true, ox: 0, width: 100, height: 120, angle: 85 } },
@@ -195,7 +195,7 @@ const CHARACTERS = {
     weaponPool: ['sword', 'spear'],
     moves: {   // Thura - dragonfire monk: flurry, dragon uppercut (launches him too), flame dash, dragon ascent, meteor dive
       sword: Object.assign(
-        { light: { active: 9, speed: 0.9, stages: [{ at: 0, dmg: 0.45, kb: 0.7 }, { at: 3, dmg: 0.45, kb: 0.7 }, { at: 6, dmg: 0.7, kb: 1.1 }] } },
+        { light: { speed: 0.9 }, combo: [{ speed: 0.8 }, { angle: 75, kb: 1.6, tall: 1.4, boost: 360, airOnce: true, active: 8 }] },
         { heavy_n: { startup: 13, active: 8, recovery: 26, boost: 560, airOnce: true, angle: 80, tall: 1.45, dmg: 1.15, kb: 1.35 } },
         { heavy_s: { startup: 12, active: 7, recovery: 24, lunge: 700, reach: 1.2, dmg: 1.15, kb: 1.3, angle: 35 } },
         { heavy_u: { startup: 9, active: 11, recovery: 26, boost: 840, boostX: 90, airOnce: true, angle: 88, tall: 1.7, dmg: 1.2, kb: 1.35 } },
@@ -237,7 +237,7 @@ const CHARACTERS = {
     weaponPool: ['chakram'],
     moves: {   // Padamya - lotus dancer: orbiting ring, boomerang ring, gliding dance, spiral rise, petal dive
       chakram: Object.assign(
-        { light: { active: 9, stages: [{ at: 0, dmg: 0.5, kb: 0.7 }, { at: 3, dmg: 0.5, kb: 0.7 }, { at: 6, dmg: 0.65, kb: 1.0 }] } },
+        { combo: [{ speed: 0.85 }, { radial: true, ox: 0, width: 130, height: 90, kb: 1.4, dmg: 1.7, speed: 1.2 }] },
         sig('light', { ox: 0.7, width: 70, height: 66, angle: 55 }),
         { heavy_n: { startup: 12, active: 16, recovery: 18,
           stages: [{ at: 0, ox: 1.0, width: 80, dmg: 0.6, kb: 0.7 }, { at: 5, ox: 2.3, width: 96, dmg: 0.6, kb: 0.7 }, { at: 11, ox: 1.0, width: 80, dmg: 1.1, kb: 1.25, angle: 50 }] } },
@@ -279,6 +279,7 @@ const CHARACTERS = {
       axe: Object.assign(
         {},
         sig('light', { lunge: 380, startup: 7, active: 6, recovery: 16, kb: 1.3, reach: 0.9, tall: 1.2 }),
+        { combo: [{ speed: 0.9 }, { dmg: 1.4, kb: 1.5, armor: 0.6 }] },
         { heavy_n: { radial: true, ox: 0, width: 210, height: 46, oy: 0.55, startup: 22, active: 6, recovery: 34, dmg: 1.3, kb: 1.2, angle: 65, armor: 0.5 } },
         { heavy_s: { startup: 20, active: 9, recovery: 32, lunge: 720, armor: 0.5, dmg: 1.25, kb: 1.5, tall: 1.2, angle: 35 } },
         { heavy_u: { startup: 14, active: 10, recovery: 28, boost: 600, airOnce: true, angle: 85, tall: 1.5, dmg: 1.2, kb: 1.4 } },
@@ -313,7 +314,7 @@ const CHARACTERS = {
     weaponPool: ['spear'],
     moves: {   // Hla - storm bell: fast long jabs, thunder thrust, staff sweep, rising thrust, plunge
       spear: Object.assign(
-        { light: { speed: 0.7, reach: 1.25, dmg: 0.85 } },
+        { light: { speed: 0.7, reach: 1.25, dmg: 0.85 }, combo: [{ speed: 0.8 }, { lunge: 300, reach: 1.5, kb: 1.5, dmg: 1.7 }] },
         { heavy_s: { lunge: 650, reach: 1.45, dmg: 1.2, startup: 17, active: 6, recovery: 24, tall: 0.8 } },
         { heavy_n: { radial: true, ox: 0, width: 160, height: 44, startup: 14, active: 8, recovery: 24, stages: [{ at: 0, dmg: 0.6, kb: 0.7 }, { at: 4, dmg: 0.8, kb: 1.1 }] } },
         { heavy_u: { startup: 9, active: 11, recovery: 24, boost: 820, airOnce: true, angle: 88, tall: 1.8, reach: 0.8, dmg: 1.15, kb: 1.3 } },
@@ -348,7 +349,8 @@ const CHARACTERS = {
     moves: {   // Kan - rushdown: 2-hit axe chain, cog rush, cog spin, cog ascent, gear-drill dive, shotgun (also boosts upward)
       axe: Object.assign(
         {},
-        sig('light', { lunge: 240, startup: 6, active: 7, recovery: 12, stages: [{ at: 0, dmg: 0.6 }, { at: 4, dmg: 0.75, angle: 55 }] }),
+        sig('light', { lunge: 240, startup: 6, active: 5, recovery: 12 }),
+        { combo: [{ lunge: 260, speed: 0.8 }, { radial: true, ox: 0, width: 120, height: 70, dmg: 1.8, kb: 1.5, lunge: 300 }] },
         { heavy_n: { radial: true, ox: 0, width: 140, height: 72, startup: 16, active: 12, recovery: 24, stages: [{ at: 0, dmg: 0.5, kb: 0.6 }, { at: 4, dmg: 0.5, kb: 0.6 }, { at: 8, dmg: 0.9, kb: 1.2 }] } },
         { heavy_s: { radial: true, ox: 0, width: 130, height: 70, startup: 14, active: 12, recovery: 24, lunge: 520, stages: [{ at: 0, dmg: 0.5, kb: 0.6 }, { at: 4, dmg: 0.5, kb: 0.6 }, { at: 8, dmg: 0.9, kb: 1.2 }] } },
         { heavy_u: { startup: 9, active: 11, recovery: 24, boost: 780, airOnce: true, angle: 88, radial: true, ox: 0, width: 90, height: 120, stages: [{ at: 0, dmg: 0.5, kb: 0.6 }, { at: 5, dmg: 0.8, kb: 1.2 }] } },

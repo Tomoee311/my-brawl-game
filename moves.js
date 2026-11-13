@@ -82,28 +82,49 @@ function mergeMove(atk, o) {
   return out;
 }
 
-// Returns the attack data for this fighter + weapon + attack id (+ multi-hit stage). Cached: the inputs never change during a match.
-function applyMoves(char, weaponId, type, atk, stage) {
+// 3-hit light combo (Brawlhalla style): neutral / side light pressed again in time = hit 2, then hit 3 (the finisher).
+// Defaults for every fighter; a fighter can change them per weapon with  moves: { katana: { combo: [ {hit 2 overrides}, {hit 3 overrides} ] } }
+const COMBO_DEFAULT = [
+  { speed: 0.9, kb: 0.9 },                                                   // hit 2: a bit quicker, small knockback
+  { speed: 1.25, dmg: 1.7, kb: 1.55, reach: 1.12, tall: 1.1, angle: 38 },    // hit 3: finisher - slower, much stronger
+];
+const COMBO_TYPES = ['light_n', 'light_s'];
+
+// Returns the attack data for this fighter + weapon + attack id (+ multi-hit stage, + combo hit 0..2). Cached: the inputs never change during a match.
+function applyMoves(char, weaponId, type, atk, stage, combo) {
+  combo = combo | 0;
+  if (!combo || COMBO_TYPES.indexOf(type) === -1) combo = 0;
   const set = char && char.moves && char.moves[weaponId || 'unarmed'];
-  if (!set || !type) return atk;
+  if (!type || (!set && !combo)) return atk;
   const cache = char._moveCache || (char._moveCache = {});
-  const key = (weaponId || 'unarmed') + '|' + type;
+  const key = (weaponId || 'unarmed') + '|' + type + '|c' + combo;
   let entry = cache[key];
   if (!entry || entry.base !== atk) {
     let out = atk;
     let stages = null;
-    const parent = diagParent(type);
-    moveKeyChain(type).forEach((k, i) => {
-      if (i === 1 && parent && set[parent]) {          // after the general kind key, before this diagonal's own keys
-        const inh = inheritedMove(set[parent]);
-        out = mergeMove(out, inh);
-        if (inh.stages) stages = inh.stages;
+    if (set) {
+      const parent = diagParent(type);
+      moveKeyChain(type).forEach((k, i) => {
+        if (i === 1 && parent && set[parent]) {          // after the general kind key, before this diagonal's own keys
+          const inh = inheritedMove(set[parent]);
+          out = mergeMove(out, inh);
+          if (inh.stages) stages = inh.stages;
+        }
+        if (set[k]) {
+          out = mergeMove(out, set[k]);
+          if (set[k].stages) stages = set[k].stages;
+        }
+      });
+    }
+    if (combo) {
+      out = mergeMove(out, COMBO_DEFAULT[combo - 1]);
+      const own = set && set.combo && set.combo[combo - 1];
+      if (own) {
+        out = mergeMove(out, own);
+        if (own.stages) stages = own.stages;
       }
-      if (set[k]) {
-        out = mergeMove(out, set[k]);
-        if (set[k].stages) stages = set[k].stages;
-      }
-    });
+      out.combo = combo;
+    }
     entry = { base: atk, atk: out, stageAt: [0], stageData: [out] };
     if (stages && stages.length) {
       entry.stageAt = stages.map((s) => s.at || 0);
@@ -120,10 +141,11 @@ function applyMoves(char, weaponId, type, atk, stage) {
 }
 
 // which stage is active `frame` frames after the hit became active
-function stageAtFrame(atk, char, weaponId, type, frame) {
-  const set = char && char.moves && char.moves[weaponId || 'unarmed'];
-  if (!set || !atk || !atk.stageCount) return 0;
-  const entry = char._moveCache && char._moveCache[(weaponId || 'unarmed') + '|' + type];
+function stageAtFrame(atk, char, weaponId, type, frame, combo) {
+  if (!atk || !atk.stageCount) return 0;
+  combo = combo | 0;
+  if (COMBO_TYPES.indexOf(type) === -1) combo = 0;
+  const entry = char && char._moveCache && char._moveCache[(weaponId || 'unarmed') + '|' + type + '|c' + combo];
   if (!entry) return 0;
   let idx = 0;
   for (let i = 0; i < entry.stageAt.length; i++) if (frame >= entry.stageAt[i]) idx = i;

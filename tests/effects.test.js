@@ -17,7 +17,7 @@ Object.keys(combos).forEach((id) => {
   combos[id].forEach((w) => ['n', 'u', 'df'].forEach((tok) => [false, true].forEach((heavy) => [0, 1, 2].forEach((stage) => {
     const p = mkP(id);
     p.attack.stage = stage;
-    const c = { base: { owner: p, sgn: 1, heavy, color: 1, alt: 2, age: 0 }, sgn: 1, heavy, w, tok, up: tok.indexOf('u') !== -1, down: tok.indexOf('d') !== -1, fx: { main: 0xffffff, alt: 0xaaaaaa }, stage };
+    const c = { base: { owner: p, sgn: 1, heavy, color: 1, alt: 2, age: 0 }, sgn: 1, heavy, w, tok, up: tok.indexOf('u') !== -1, down: tok.indexOf('d') !== -1, fx: { main: 0xffffff, alt: 0xaaaaaa }, stage, combo: heavy ? 0 : stage, step: stage + (heavy ? 0 : stage) };
     const before = VFX.length;
     try { HERO_SWING[id](p, { kind: heavy ? 'heavy' : 'light' }, c); } catch (e) { fails++; console.log('FAIL', id, w, tok, heavy, stage, e.message); }
     calls++;

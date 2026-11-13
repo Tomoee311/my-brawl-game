@@ -11,7 +11,7 @@ load('moves.js', '\nthis.applyMoves = applyMoves; this.stageAtFrame = stageAtFra
 load('weapons.js', '\nthis.WEAPONS = WEAPONS;');
 load('characters.js', '\nthis.CHARACTERS = CHARACTERS;');
 
-let fails = 0, checked = 0;
+let fails = 0, checked = 0, combos = 0;
 const bad = (m) => { fails++; console.log('FAIL', m); };
 const TYPES = [];
 ['light', 'heavy'].forEach((k) => {
@@ -65,6 +65,17 @@ Object.values(ctx.CHARACTERS).forEach((c) => {
       const dg = ctx.applyMoves(c, w, 'heavy_' + d + '_' + s, ctx.WEAPONS[w].attacks['heavy_' + d + '_' + s], 0);
       if (dn.dive && dg.dive !== dn.dive) bad(c.name + ' ' + w + ' heavy_' + d + '_' + s + ' lost the dive');
     }));
+    // the 3-hit light combo must be valid and the finisher stronger than hit 1
+    ['light_n', 'light_s'].forEach((t) => {
+      const base = ctx.WEAPONS[w].attacks[t];
+      const h1 = ctx.applyMoves(c, w, t, base, 0, 0), h2 = ctx.applyMoves(c, w, t, base, 0, 1), h3 = ctx.applyMoves(c, w, t, base, 0, 2);
+      [h2, h3].forEach((a, i) => ['startup', 'active', 'recovery', 'damage', 'baseKb'].forEach((f) => {
+        if (typeof a[f] !== 'number' || Number.isNaN(a[f])) bad(c.name + ' ' + w + ' ' + t + ' combo hit ' + (i + 2) + ': ' + f + ' = ' + a[f]);
+      }));
+      if (!(h3.baseKb > h1.baseKb)) bad(c.name + ' ' + w + ' ' + t + ': the combo finisher must launch farther than hit 1');
+      if (h3.boost && (h3.active < 8 || h3.boost < 300)) bad(c.name + ' ' + w + ' ' + t + ': finisher boost needs active >= 8');
+      combos++;
+    });
     // summary row for the two signature moves
     const l = ctx.applyMoves(c, w, 'light_n', ctx.WEAPONS[w].attacks.light_n, 0);
     const h = ctx.applyMoves(c, w, 'heavy_n', ctx.WEAPONS[w].attacks.heavy_n, 0);
@@ -75,6 +86,6 @@ Object.values(ctx.CHARACTERS).forEach((c) => {
   });
 });
 rows.forEach((r) => console.log(r[0].padEnd(18), r[1].padEnd(60), r[2]));
-console.log('\nchecked', checked, 'attack variants');
+console.log('\nchecked', checked, 'attack variants and', combos, 'light combos');
 if (fails) { console.log(fails + ' problem(s)'); process.exit(1); }
 console.log('all fighter attack styles are valid');

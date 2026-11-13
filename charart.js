@@ -15,7 +15,7 @@
 const ART_FRAME_W = 160;
 const ART_FRAME_H = 128;
 const ART_FEET_MARGIN = 28;      // space below the feet (pixels between the bottom of the frame and the feet)
-const ART_TOTAL_FRAMES = 88;     // legacy sheets: 8 cols x 11 rows; expanded sheets declare 104 frames
+const ART_TOTAL_FRAMES = 96;     // 8 cols x 12 rows: 88 base frames + light combo hit 2 / 3 (88-93) + ledge hang / climb (94, 95); expanded sheets declare 104
 
 // character id in game -> art name (file name under assets/chars/)
 // If you draw new art and want to rename it, change it here.
@@ -32,6 +32,8 @@ const ART_FRAMES = {
   dodgeSpot: 24, // 24-27
   dodgeRoll: 32, // 32-35
   attack: 40,   // 40 + 3*k + phase   (phase 0 = wind-up, 1 = strike, 2 = recover)
+  combo: 88,    // light combo hit 2 = 88-90, hit 3 (finisher) = 91-93   (same 3 phases)
+  ledge: 94,    // 94 = hanging on a ledge, 95 = climbing up
 };
 const ART_ATTACK_ORDER = [
   'nlight', 'slight', 'dlight', 'ulight', 'nheavy', 'sheavy', 'dheavy', 'uheavy',
@@ -112,6 +114,8 @@ function artAttackFrame(p) {
     return ART_FRAMES.attack + k * 4 + f;
   }
   const phase = st === 'startup' ? 0 : (st === 'active' ? 1 : 2);
+  const t = String(p.attack.type);
+  if ((p.attack.combo | 0) > 0 && (t === 'light_n' || t === 'light_s')) return ART_FRAMES.combo + (p.attack.combo - 1) * 3 + phase;   // 3-hit combo
   return ART_FRAMES.attack + k * 3 + phase;
 }
 
@@ -124,6 +128,8 @@ function artFrameFor(p, now) {
     const step = Math.min(3, Math.floor(prog * 4));
     return (p.dodge.kind === 'spot' ? ART_FRAMES.dodgeSpot : ART_FRAMES.dodgeRoll) + step;
   }
+  if (p.ledge) return ART_FRAMES.ledge;
+  if (p.ledgeClimb > 0 && p.attack.state === 'none') return ART_FRAMES.ledge + 1;
   if (p.attack.state !== 'none') return artAttackFrame(p);
   if (!onFloor) return body.velocity.y < -40 ? ART_FRAMES.jump : ART_FRAMES.fall;
   if (p.landAnimFrames > 0) return ART_FRAMES.land;

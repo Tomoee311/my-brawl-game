@@ -2,7 +2,8 @@
 
 Sheet = 8 columns x 11 rows of 160x128 frames (88 frames), character faces RIGHT, feet on y = 100:
    idle 0-3, run 8-13, jump 16, fall 17, hurt 18, land 19, dodge-on-spot 24-27, dodge-roll 32-35,
-   attacks 40 + 3*k + phase  (phase 0 wind-up / 1 strike / 2 recover) for the 16 attack types in ATTACK_ORDER.
+   attacks 40 + 3*k + phase  (phase 0 wind-up / 1 strike / 2 recover) for the 16 attack types in ATTACK_ORDER,
+   light combo hit 2 = 88-90, hit 3 (finisher) = 91-93, ledge hang = 94, ledge climb = 95  (96 frames, sheet 1280 x 1536).
 Each fighter lives in its own file (make_thaung.py ...) and only has to say how its parts look; this file does the rest.
 """
 import math
@@ -10,7 +11,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
 W, H = 160, 128
-FRAME_COLS, FRAME_ROWS = 8, 11
+FRAME_COLS, FRAME_ROWS = 8, 12
 FEET_X, FEET_Y = 80, 97
 OUTLINE = (27, 18, 36)
 
@@ -414,6 +415,23 @@ def pose_attack(name, phase, weapon, style=None):
                 lift_f=max(0, -yr * 0.9), lift_b=max(0, -yr * 1.0), leg_f=14, leg_b=-10, arm_f=a_use + 40, arm_b=100, sway=4, strike=0, heavy=heavy, kind='atk', roll=st.get('spin_r'))
 
 
+def pose_combo(hit, phase, weapon, style=None):
+    """light combo hit 2 / 3.  style may hold 'combo2' / 'combo3' (same keys as pose_attack styles)."""
+    if hit == 2:
+        st = dict(wind=-50, x_s=8, lean_s=12, after=20, crouch_s=1)
+        st.update((style or {}).get('combo2', {}))
+        return pose_attack('slight', phase, weapon, {'light': st})
+    st = dict(wind=110, crouch_w=3, x_w=-4, x_s=13, lean_s=18, crouch_s=2, after=50)
+    st.update((style or {}).get('combo3', {}))
+    return pose_attack('sheavy', phase, weapon, {'heavy': st})
+
+
+def pose_ledge(climb):
+    if climb:   # pulling up onto the stage
+        return Pose(lean=14, crouch=4, arm_f=-40, arm_b=-70, leg_f=20, leg_b=-10, lift_f=6, lift_b=0, x=3, y=-2, kind='ledge', sway=-4)
+    return Pose(arm_f=-95, arm_b=-102, leg_f=4, leg_b=-6, lift_f=12, lift_b=14, lean=0, kind='ledge', sway=1)
+
+
 # ------------------------------------------------------------------ sheet
 def build_sheet(cfg, dress, weapon, style=None, atk_style=None):
     sheet = Image.new('RGBA', (W * FRAME_COLS, H * FRAME_ROWS), (0, 0, 0, 0))
@@ -435,6 +453,11 @@ def build_sheet(cfg, dress, weapon, style=None, atk_style=None):
     for k, name in enumerate(ATTACK_ORDER):
         for ph in range(3):
             put(40 + k * 3 + ph, render(cfg, dress, weapon, pose_attack(name, ph, weapon, atk_style), style))
+    for hit in (2, 3):                                    # light combo hit 2 (88-90) and hit 3 / finisher (91-93)
+        for ph in range(3):
+            put(88 + (hit - 2) * 3 + ph, render(cfg, dress, weapon, pose_combo(hit, ph, weapon, atk_style), style))
+    put(94, render(cfg, dress, weapon, pose_ledge(False), style))     # hanging on a ledge
+    put(95, render(cfg, dress, weapon, pose_ledge(True), style))      # climbing up
     return sheet
 
 

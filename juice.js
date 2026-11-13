@@ -394,7 +394,8 @@ const VfxMgr = {
     const up = tok.indexOf('u') !== -1, down = tok.indexOf('d') !== -1;
     const base = { owner: p, sgn, heavy, color: fx.main, alt: fx.alt, age: 0 };
     // movement moves (lunge / rise / dive / hook) get afterimages and rings for every fighter; then each fighter's own look (HERO_SWING below)
-    const cc = { base, sgn, heavy, w, tok, up, down, fx, stage: p.attack.stage || 0 };
+    const cc = { base, sgn, heavy, w, tok, up, down, fx, stage: p.attack.stage || 0, combo: p.attack.combo | 0 };
+    cc.step = cc.stage + cc.combo;      // alternates the look of a light string (hit 1 / 2 / 3)
     if (typeof commonMoveFx === 'function') commonMoveFx(p, atk, cc);
     const own = typeof HERO_SWING !== 'undefined' && p.char && HERO_SWING[p.char.id];
     if (own && own(p, atk, cc)) return;
@@ -745,6 +746,11 @@ const centerAng = (c) => (c.up ? (c.tok.length > 1 ? -45 : -90) : c.down ? (c.to
 
 function commonMoveFx(p, atk, c) {
   if (c.stage !== 0) return;
+  if (c.combo === 2) {                                     // 3-hit combo finisher: a bigger flourish
+    fxRing(p, c, 70, 8, 62, { life: 12, width: 5, color: c.fx.alt });
+    fxSparks(p, c, 6, { dx: 70, c1: 0xffffff, size: 3 });
+    VfxMgr.shake(70, 0.005);
+  }
   const x = p.sprite.x, y = bodyCY(p), foot = p.sprite.body.bottom;
   if (atk.lunge) {                                         // dash-in: a trail of after-images behind the fighter
     for (let i = 0; i < 4; i++) VfxMgr.danteDashTrail(x - c.sgn * i * 22, y, c.fx.main);
@@ -770,8 +776,8 @@ const HERO_SWING = {
     if (c.w !== 'katana') return false;
     const m = centerAng(c);
     if (!c.heavy) {
-      fxArc(c, { a0: m - 52 + c.stage * 20, a1: m + 52 - c.stage * 20, r: 70, w: 8, life: 7, hasEdge: true });
-      if (c.stage === 0) fxArc(c, { a0: m + 46, a1: m - 46, r: 52, w: 5, life: 6, hasEdge: true, color: c.fx.alt });
+      fxArc(c, { a0: m - 52 + c.step * 20, a1: m + 52 - c.step * 20, r: 70, w: 8, life: 7, hasEdge: true });
+      if (c.step === 0) fxArc(c, { a0: m + 46, a1: m - 46, r: 52, w: 5, life: 6, hasEdge: true, color: c.fx.alt });
     } else {
       fxStreak(c, { ang: m, len: 175, life: 13, color: c.fx.main });
       fxStreak(c, { ang: m + 4, len: 130, life: 10, color: 0xffffff });
@@ -822,8 +828,8 @@ const HERO_SWING = {
   aung_zeya(p, atk, c) {
     if (c.w === 'sword') {
       if (!c.heavy) {
-        const ang = [-24, 20, -4][c.stage % 3];
-        fxStreak(c, { ang, len: 74 + c.stage * 12, life: 6, color: c.stage === 2 ? c.fx.alt : c.fx.main });
+        const ang = [-24, 20, -4][c.step % 3];
+        fxStreak(c, { ang, len: 74 + c.step * 12, life: 6, color: c.step === 2 ? c.fx.alt : c.fx.main });
         fxSparks(p, c, 3, { dx: 56, vx: c.sgn * 140, vy: -80 });
         return true;
       }
@@ -843,8 +849,8 @@ const HERO_SWING = {
   thazin(p, atk, c) {
     if (c.w !== 'chakram') return false;
     if (!c.heavy) {
-      fxRing(p, c, 14 + c.stage * 6, 14, 60 + c.stage * 8, { life: 9, width: 4, color: c.fx.main });
-      fxArc(c, { a0: -150 + c.stage * 70, a1: -30 + c.stage * 70, r: 58, w: 12, life: 8, hasEdge: true });
+      fxRing(p, c, 14 + c.step * 6, 14, 60 + c.step * 8, { life: 9, width: 4, color: c.fx.main });
+      fxArc(c, { a0: -150 + c.step * 70, a1: -30 + c.step * 70, r: 58, w: 12, life: 8, hasEdge: true });
       fxSparks(p, c, 4, { dx: 24, vx: 0, vy: -60, c1: 0xff9ed6, c2: 0xffffff });
       return true;
     }
@@ -891,7 +897,7 @@ const HERO_SWING = {
     if (c.w !== 'axe') return false;
     const m = centerAng(c);
     if (!c.heavy) {
-      fxArc(c, { a0: m - 60 + c.stage * 110, a1: m + 60 - c.stage * 110 + (c.stage ? 0 : 0), r: 66, w: 22, life: 8, hasEdge: true });
+      fxArc(c, { a0: m - 60 + c.step * 110, a1: m + 60 - c.step * 110, r: 66, w: 22, life: 8, hasEdge: true });
       fxSparks(p, c, 3, { dx: 54, c1: 0xffffff });
       return true;
     }

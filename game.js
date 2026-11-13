@@ -208,6 +208,14 @@ const AIR_DASHES_MAX = 3;
 // Fast weapons (katana) get extra cooldown so they can't be mashed.
 const LIGHT_MIN_CYCLE = 32;
 
+// ---------- Brawlhalla-style movement ----------
+const FAST_FALL_SPEED = 680;        // hold down while falling (kept below ~720 px/s: faster could tunnel through a platform)
+const GRAVITY_CANCEL_FRAMES = 12;   // an air hit freezes your fall for this long (once per airtime - land to get it back)
+const COMBO_WINDOW = 30;            // frames after a light attack in which pressing light again continues the 3-hit combo
+const COMBO_MIN_CYCLE = 17;         // combo hits 2 and 3 follow up faster than a fresh light attack (LIGHT_MIN_CYCLE)
+const COMBO_FINISH_CYCLE = 40;      // ...but after the finisher you wait a bit
+const COMBO_BUFFER = 12;            // a light press this early before the next hit is remembered
+
 // ---------- Knockback / Hitstun ----------
 // Knockback force is calculated with this formula:
 //   kb = baseKb + (target.damage % * growth)
@@ -283,7 +291,9 @@ const AttackRouter = {
     const weaponId = p && (p.equippedWeapon || p.weaponId);
     let atk = weaponId && typeof WEAPONS !== 'undefined' && WEAPONS[weaponId] && WEAPONS[weaponId].attacks[type];
     if (!atk) atk = ATTACKS[type] || ATTACKS.light_n;
-    if (p && p.char && typeof applyMoves === 'function') atk = applyMoves(p.char, weaponId, type, atk, stage);
+    // light combo: the running neutral / side light may be hit 2 or 3 of the chain (moves.js COMBO_DEFAULT + per-fighter `combo`)
+    const combo = (p && p.attack && p.attack.type === type && p.attack.state !== 'none') ? (p.attack.combo | 0) : 0;
+    if (p && p.char && typeof applyMoves === 'function') atk = applyMoves(p.char, weaponId, type, atk, stage, combo);
     const stats = p && p.char && p.char.stats;
     if (!stats) return atk;
 
@@ -587,6 +597,9 @@ function resetPlayerState(p) {
   p.jumpsLeft = MAX_JUMPS;
   p.airDashes = AIR_DASHES_BASE;
   p.recoveryUsed = false;
+  if (p.ledge && p.sprite && p.sprite.body) p.sprite.body.setAllowGravity(true);
+  p.ledge = null; p.ledgeLast = null; p.ledgeCooldown = 0; p.ledgeClimb = 0;
+  p.gcFrames = 0; p.gcUsed = false; p.fastFalling = false; p.comboIdx = 0; p.comboWindow = 0;
   p.attack = newAttackState();
   p.cooldown = 0;
   p.dropBuffer = 0;
@@ -610,6 +623,7 @@ function resetPlayerState(p) {
 function knockOut(p) {
   if (match.over || p.dead) return;   // if both players die on the same frame, don't count twice
   if (typeof AudioMgr !== 'undefined') AudioMgr.play('ko');
+  if (p.ledge) { p.ledge = null; p.sprite.body.setAllowGravity(true); }   // died while hanging on a ledge
   if (p.useMouse) { mouseQueue.attack = null; mouseQueue.throw = false; }
   koEffects.push({
     x: Phaser.Math.Clamp(p.sprite.x, 0, WIDTH),
@@ -906,6 +920,11 @@ function makePlayer(scene, x, y, char, keys, useMouse) {
     jumpsLeft: MAX_JUMPS,
     airDashes: AIR_DASHES_BASE,
     recoveryUsed: false,       // heavy-up boost (moves.js airOnce) already used in this airtime
+    ledge: null,               // { part, side, frames } while hanging on a stage edge (ledge.js)
+    ledgeLast: null, ledgeCooldown: 0, ledgeClimb: 0,
+    gcFrames: 0, gcUsed: false,   // gravity cancel after an air hit
+    fastFalling: false,
+    comboIdx: 0, comboWindow: 0,   // light attack 3-hit combo
     attack: newAttackState(),
     cooldown: 0,
     hitFlash: 0,
@@ -940,7 +959,8 @@ function newDodgeState() {
 
 // true while the player can't be hit
 function isInvulnerable(p) {
-  return p.spawnHold > 0 || p.spawnInvuln > 0 || (p.dodge.active && p.dodge.frame <= p.dodge.invuln);
+  return p.spawnHold > 0 || p.spawnInvuln > 0 || (p.dodge.active && p.dodge.frame <= p.dodge.invuln) ||
+    (p.ledge && p.ledge.frames < LEDGE.INVULN);
 }
 
 function canDodge(p, stunned, onFloor) {
@@ -995,7 +1015,7 @@ function endDodge(p, withCooldown) {
 }
 
 function newAttackState() {
-  return { state: 'none', type: 'light_n', frame: 0, hitList: [], back: false, stage: 0, refunded: false, boosting: false, diving: false };
+  return { state: 'none', type: 'light_n', frame: 0, hitList: [], back: false, stage: 0, refunded: false, boosting: false, diving: false, combo: 0 };
 }
 
 function readInput(p) {
@@ -1227,6 +1247,15 @@ function simulate(time, dt) {
       p.jumpsLeft = MAX_JUMPS;
       p.airDashes = AIR_DASHES_BASE;
       p.recoveryUsed = false;
+      p.gcUsed = false;
+      p.ledgeLast = null;
+    }
+    if (p.ledgeCooldown > 0) p.ledgeCooldown--;
+    if (p.ledgeClimb > 0) p.ledgeClimb--;
+
+    // ---- Hanging on a ledge: only ledge actions are possible ----
+    if (p.ledge) {
+      if (updateLedge(p, input)) return;
     }
 
     // ---- Hitstun: can't jump/attack/move while stunned ----
@@ -1290,6 +1319,19 @@ function simulate(time, dt) {
       p.sprite.setVelocityX(p.facing * (p.attack.back ? -1 : 1) * atk.lunge);
     }
 
+    // ---- Fast fall: hold DOWN while falling ----
+    p.fastFalling = false;
+    if (!onFloor && !stunned && !dodging && p.attack.state === 'none' && input.downHeld && body.velocity.y > 0 && p.gcFrames <= 0) {
+      p.sprite.setVelocityY(Math.max(body.velocity.y, FAST_FALL_SPEED));
+      p.fastFalling = true;
+    }
+
+    // ---- Gravity cancel: after an air hit the fall is frozen for a moment, so you can follow up ----
+    if (p.gcFrames > 0) {
+      p.gcFrames--;
+      if (!onFloor && !stunned && !dodging && !p.attack.diving) p.sprite.setVelocityY(Math.min(body.velocity.y, 0));
+    }
+
     // ---- Dropping through a platform (one-way only; solid platforms ignore S) ----
     p.downHeld = input.downHeld;
     if (input.down) p.dropBuffer = DROP_BUFFER;
@@ -1334,6 +1376,12 @@ function simulate(time, dt) {
       p.wasAirborne = true;
     }
 
+    // ---- Ledge grab: falling next to the edge of the main stage ----
+    if (!onFloor && !p.ledge && !stunned && !dodging && p.attack.state === 'none' && p.ledgeCooldown <= 0 && !input.downHeld) {
+      tryLedgeGrab(p);
+      if (p.ledge) return;
+    }
+
     // ---- Attacking ----
     updateAttack(p, input, onFloor, facingBefore);
 
@@ -1347,6 +1395,99 @@ function simulate(time, dt) {
       knockOut(p);
     }
   });
+}
+
+// ---------- Ledge (see ledge.js for the maths) ----------
+function ledgeParts() {
+  return stageParts.map((s, i) => ({ id: i, left: s.body.left, right: s.body.right, top: s.body.top, oneWay: !!s.oneWay, obj: s }));
+}
+
+function moveBodyCenterTo(p, x, y) {
+  const b = p.sprite.body;
+  p.sprite.body.reset(p.sprite.x + (x - b.center.x), p.sprite.y + (y - b.center.y));
+}
+
+function tryLedgeGrab(p) {
+  const b = p.sprite.body;
+  const taken = [];
+  players.forEach((o) => { if (o !== p && o.ledge) taken.push({ id: o.ledge.part.id, side: o.ledge.side }); });
+  const blocked = p.ledgeLast && p.ledgeCooldown > 0 ? p.ledgeLast : null;
+  const hit = findLedge(ledgeParts(), { cx: b.center.x, top: b.top, vy: b.velocity.y }, taken, blocked);
+  if (!hit) return;
+  p.ledge = { part: hit.part, side: hit.side, frames: 0 };
+  const c = ledgeHangCenter(hit.part, hit.side, b.width, b.height);
+  moveBodyCenterTo(p, c.x, c.y);
+  b.setAllowGravity(false);
+  p.sprite.setVelocity(0, 0);
+  p.facing = -hit.side;
+  p.state = 'ledge';
+  p.attackBuffer = null;
+  // grabbing a ledge counts like touching the ground: everything refreshes
+  p.jumpsLeft = MAX_JUMPS;
+  p.airDashes = AIR_DASHES_BASE;
+  p.recoveryUsed = false;
+  p.gcUsed = false;
+  p.gcFrames = 0;
+  if (typeof AudioMgr !== 'undefined') AudioMgr.play('pickup');
+  if (typeof VFX !== 'undefined') VFX.push({ type: 'ring', x: b.center.x + hit.side * 14, y: hit.part.top, r0: 6, r1: 40, life: 12, width: 3, color: p.color, age: 0 });
+}
+
+function releaseLedge(p, drop) {
+  const L = p.ledge;
+  if (!L) return;
+  p.ledgeLast = { id: L.part.id, side: L.side };
+  p.ledgeCooldown = LEDGE.REGRAB;
+  p.ledge = null;
+  p.sprite.body.setAllowGravity(true);
+  if (drop) p.sprite.setVelocity(-L.side * 40, 140);
+}
+
+function ledgeGetUp(p, how, atkInput) {
+  const L = p.ledge;
+  const b = p.sprite.body;
+  const inward = -L.side;
+  const c = ledgeGetUpCenter(L.part, L.side, b.width, b.height);
+  releaseLedge(p, false);
+  moveBodyCenterTo(p, c.x, c.y);
+  p.facing = inward;
+  p.ledgeClimb = 10;
+  if (how === 'jump') {                                   // get up with a full jump
+    p.sprite.setVelocity(inward * 90, -(p.jumpSpeed || JUMP_SPEED));
+    p.jumpsLeft = Math.max(0, MAX_JUMPS - 1);
+    p.state = 'jumping';
+  } else if (how === 'attack') {                          // get-up attack: a side attack toward the stage as soon as you stand
+    p.sprite.setVelocity(0, 0);
+    p.cooldown = 0;
+    p.attackBuffer = { attack: atkInput, left: inward < 0, right: inward > 0, up: false, downHeld: false, t: 8 };
+  } else if (how === 'dodge') {                           // get-up roll (invulnerable)
+    p.sprite.setVelocity(0, 0);
+    p.dodgeCooldown = 0;
+    startDodge(p, { left: inward < 0, right: inward > 0 }, true);
+  } else {                                                // plain climb
+    p.sprite.setVelocity(inward * 60, -80);
+    p.spawnInvuln = Math.max(p.spawnInvuln, 16);
+  }
+}
+
+// returns true while the fighter is still hanging (the normal update is skipped), false if they let go / climbed this frame
+function updateLedge(p, input) {
+  const L = p.ledge;
+  L.frames++;
+  p.facing = -L.side;
+  p.sprite.setVelocity(0, 0);
+  p.state = 'ledge';
+  p.attackBuffer = null;
+  if (L.frames <= LEDGE.GRACE) return true;
+  const inward = -L.side;
+  const toward = inward > 0 ? input.right : input.left;
+  const away = inward > 0 ? input.left : input.right;
+  if (input.jump) { input.jump = false; ledgeGetUp(p, 'jump'); return false; }
+  if (input.attack) { const a = input.attack; input.attack = null; ledgeGetUp(p, 'attack', a); return false; }
+  if (input.dodge) { input.dodge = false; ledgeGetUp(p, 'dodge'); return false; }
+  if (input.down || input.downHeld || away) { releaseLedge(p, true); return false; }
+  if (toward && L.frames > LEDGE.GRACE + 6) { ledgeGetUp(p, 'climb'); return false; }
+  if (L.frames >= LEDGE.MAX_FRAMES) { releaseLedge(p, true); return false; }
+  return true;
 }
 
 // Attack state machine: none -> startup -> active -> recovery -> none
@@ -1366,6 +1507,13 @@ function applyAttackMotion(p, a, atk) {
   }
 }
 
+// can the next light press continue a combo? (the attack that is running / just ended was a neutral or side light that is not the finisher)
+function comboChainable(p) {
+  const a = p.attack;
+  if (a.state !== 'none') return (a.type === 'light_n' || a.type === 'light_s') && (a.combo | 0) < 2;
+  return p.comboWindow > 0;
+}
+
 function updateAttack(p, input, onFloor, facingBefore) {
   const a = p.attack;
   const prevFacing = facingBefore || p.facing;
@@ -1375,13 +1523,14 @@ function updateAttack(p, input, onFloor, facingBefore) {
   if (input.attack && ATTACK_BUFFER > 0) {
     p.attackBuffer = {
       attack: input.attack, left: input.left, right: input.right,
-      up: input.up, downHeld: input.downHeld, t: ATTACK_BUFFER,
+      up: input.up, downHeld: input.downHeld, t: (input.attack === 'light' && comboChainable(p)) ? COMBO_BUFFER : ATTACK_BUFFER,
     };
   }
   // if the buffer is off (0), only use a press made on this frame
   const req = ATTACK_BUFFER > 0 ? p.attackBuffer : (input.attack ? input : null);
 
   if (a.state === 'none') {
+    if (p.comboWindow > 0) p.comboWindow--;
     if (p.cooldown > 0) {
       p.cooldown--;
     } else if (req) {
@@ -1395,6 +1544,12 @@ function updateAttack(p, input, onFloor, facingBefore) {
         // diagonal: the character doesn't turn (a back attack hits behind them)
         p.facing = prevFacing;
       }
+      // combo: pressing light again within the window after a neutral / side light = the next hit of the 3-hit string
+      let combo = 0;
+      if ((id === 'light_n' || id === 'light_s') && p.comboWindow > 0 && p.comboIdx < 2) combo = p.comboIdx + 1;
+      p.comboIdx = combo;
+      p.comboWindow = 0;
+      a.combo = combo;
       a.state = 'startup';
       a.type = id;
       a.frame = 0;
@@ -1442,7 +1597,7 @@ function updateAttack(p, input, onFloor, facingBefore) {
       // multi-hit: at each stage frame the hit list resets so the same enemy can be hit again (see moves.js `stages`)
       let cur = atk;
       if (atk.stageCount && typeof stageAtFrame === 'function') {
-        const idx = stageAtFrame(atk, p.char, p.equippedWeapon || p.weaponId, a.type, a.frame);
+        const idx = stageAtFrame(atk, p.char, p.equippedWeapon || p.weaponId, a.type, a.frame, a.combo);
         if (idx !== a.stage) {
           a.stage = idx;
           a.hitList = [];
@@ -1468,7 +1623,14 @@ function updateAttack(p, input, onFloor, facingBefore) {
     if (atk.kind === 'light') {
       // anti-spam: pad the cooldown so the whole light attack cycle is never shorter than LIGHT_MIN_CYCLE frames
       const used = atk.startup + atk.active + atk.recovery;
-      p.cooldown = Math.max(p.cooldown, LIGHT_MIN_CYCLE - used);
+      const chain = (a.type === 'light_n' || a.type === 'light_s');
+      let minCycle = LIGHT_MIN_CYCLE;
+      if (chain) {
+        // 3-hit combo: hits 1 and 2 can be followed up quickly, the finisher makes you wait a little
+        if ((a.combo | 0) < 2) { minCycle = COMBO_MIN_CYCLE; p.comboWindow = COMBO_WINDOW; p.comboIdx = a.combo | 0; }
+        else { minCycle = COMBO_FINISH_CYCLE; p.comboIdx = 0; }
+      }
+      p.cooldown = Math.max(Math.min(p.cooldown, minCycle), minCycle - used);
     }
   }
 }
@@ -1574,6 +1736,18 @@ function onHit(attacker, target, customAtk) {
     attacker.recoveryUsed = false;                                       // ...and the heavy-up boost again
     if (!customAtk) attacker.attack.refunded = true;
   }
+  // gravity cancel: an air hit freezes the attacker's fall for a moment (once per airtime)
+  if (!customAtk && isAirborne(attacker) && !attacker.gcUsed) {
+    attacker.gcUsed = true;
+    attacker.gcFrames = GRAVITY_CANCEL_FRAMES;
+    attacker.sprite.setVelocityY(Math.min(attacker.sprite.body.velocity.y, 0));
+    if (typeof VFX !== 'undefined') VFX.push({ type: 'ring', x: attacker.sprite.x, y: attacker.sprite.body.center.y, r0: 6, r1: 34, life: 9, width: 2, color: 0xffffff, age: 0 });
+  }
+
+  // a hit breaks the target's combo and knocks them off a ledge
+  target.comboIdx = 0;
+  target.comboWindow = 0;
+  if (target.ledge) releaseLedge(target, false);
 
   if (absorb) {   // armored: no knockback, no hitstun, the target keeps attacking
     target.hitFlash = 4;

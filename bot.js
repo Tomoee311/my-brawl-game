@@ -59,6 +59,10 @@ function botMainStage() {
 function botInput(p) {
   const out = botNeutral();
   if (SELECTION.mode === 'tutorial') return out;   // training dummy: stands still, never attacks, never dodges
+  if (p.ledge) {                                   // hanging on a ledge: wait a moment, then get up with a jump
+    out.jump = p.ledge.frames > 28;
+    return out;
+  }
   const L = BOT_LEVELS[p.botLevel || SELECTION.botLevel] || BOT_LEVELS.medium;
   const st = botState(p);
   const enemy = players.find((q) => q !== p);

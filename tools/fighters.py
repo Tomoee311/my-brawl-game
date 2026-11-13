@@ -289,3 +289,12 @@ STYLES_NEW = {
         },
     },
 }
+
+
+# light combo poses: hit 2 = 'combo2', hit 3 (finisher) = 'combo3'  (same keys as the attack styles above)
+COMBO_NEW = {
+    'thaung': {'axe': {'combo2': dict(wind=15, a_s=55, lean_s=24, x_s=11, crouch_s=4, face='yell'), 'combo3': dict(wind=165, a_s=80, crouch_w=6, lean_w=-12, crouch_s=8, lean_s=22, x_s=4, after=-4)}},
+    'hla': {'spear': {'combo2': dict(wind=18, x_s=11, lean_s=10, after=12), 'combo3': dict(wind=26, crouch_w=3, lean_w=-10, x_w=-8, x_s=19, lean_s=20, after=10, leg_f_s=34, leg_b_s=-30)}},
+    'kan': {'axe': {'combo2': dict(wind=-40, x_s=11, lean_s=14, after=14), 'combo3': dict(wind=170, after=170, spin_s=26, lean_s=10, y_s=-2, x_s=8, two=True)},
+            'gun': {'combo2': dict(wind=14, x_s=3, lean_s=5, after=8), 'combo3': dict(wind=24, lean_s=-6, x_s=-3, crouch_s=2, x_r=-4)}},
+}

@@ -11,7 +11,10 @@ from chibi_engine import build_sheet, preview
 import fighters as F
 import fighters2 as F2
 
-ATK_STYLES = dict(F.STYLES_NEW, **F2.STYLES_VETS)     # per-fighter attack poses
+ATK_STYLES = {}
+for _src, _combo in ((F.STYLES_NEW, F.COMBO_NEW), (F2.STYLES_VETS, F2.COMBO_VETS)):      # per-fighter attack + combo poses
+    for _name, _weapons in _src.items():
+        ATK_STYLES[_name] = {w: dict(s, **_combo.get(_name, {}).get(w, {})) for w, s in _weapons.items()}
 OUT = os.path.join(os.path.dirname(__file__), '..', 'assets', 'chars')
 # name -> (config, dress function, weapons, file prefix used by the game in assets/chars/)
 JOBS = {

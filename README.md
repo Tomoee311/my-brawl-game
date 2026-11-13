@@ -39,7 +39,14 @@ The weapon tables in `weapons.js` give the base numbers; each fighter's own styl
 heavy up = a rising strike that boosts the fighter upward (`boost`; in the air it works once per airtime until you land or hit someone: a recovery);
 heavy down = a dive / ground pound (`dive`); heavy neutral = the fighter's signature (spin, boomerang ring, ground slam, mist burst...).
 
-Run all checks: `node tests/load.test.js`, `moves.test.js`, `fighters.test.js`, `effects.test.js`, `net.test.js`, `peer-flow.test.js`.
+**Movement like Brawlhalla**
+- **Ledge grab** - fall next to the edge of the main stage (not the one-way platforms) and you grab the ledge: safe for a moment, jumps / dash / recovery refresh.
+  Get up with jump (full jump), light/heavy (get-up attack), dodge (get-up roll), hold toward the stage (climb), or let go with down / away. Max hang time 4 s. Logic in `ledge.js` + `game.js`.
+- **Fast fall** - hold down while falling.
+- **Gravity cancel** - hitting an enemy in the air freezes your fall for a moment (once per airtime) so you can follow up.
+- **3-hit light combo** - press neutral / side light again quickly: hit 1, hit 2, then a strong finisher. Defaults in `moves.js` (`COMBO_DEFAULT`), per fighter `combo: [hit2, hit3]` in `characters.js`.
+
+Run all checks: `node tests/load.test.js`, `moves.test.js`, `ledge.test.js`, `fighters.test.js`, `effects.test.js`, `net.test.js`, `peer-flow.test.js`.
 
 ## Controls (default - all rebindable in Lobby > Settings, keyboard and mouse)
 | | Player 1 | Player 2 |

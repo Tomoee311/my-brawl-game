@@ -59,5 +59,23 @@ eq('a light diagonal does not get the heavy boost', lightuf.boost, undefined);
 const own = applyMoves({ moves: { katana: { heavy_u: { boost: 800 }, heavy_uf: { boost: 500 } } } }, 'katana', 'heavy_uf_g', dbase, 0);
 eq('the diagonal can override the inherited boost', own.boost, 500);
 
+// 3-hit combo: defaults for everybody, per-weapon overrides on top
+const cbase = Object.assign({}, base, { kind: 'light' });
+const plain = {};                                  // a fighter with no moves at all still gets the default combo
+const c1 = applyMoves(plain, 'katana', 'light_n', cbase, 0, 0);
+const c2 = applyMoves(plain, 'katana', 'light_n', cbase, 0, 1);
+const c3 = applyMoves(plain, 'katana', 'light_n', cbase, 0, 2);
+eq('hit 1 is the plain attack', c1 === cbase, true);
+eq('hit 2 is quicker', c2.startup < cbase.startup && c2.recovery < cbase.recovery, true);
+eq('finisher hits much harder', [c3.damage > cbase.damage * 1.5, c3.baseKb > cbase.baseKb * 1.4], [true, true]);
+eq('finisher is slower', c3.startup > cbase.startup, true);
+eq('only neutral / side lights combo', applyMoves(plain, 'katana', 'light_u_tilt', cbase, 0, 2) === cbase, true);
+eq('heavy attacks do not combo', applyMoves(plain, 'katana', 'heavy_n', heavyBase, 0, 2) === heavyBase, true);
+const cc = applyMoves({ moves: { katana: { combo: [{ dmg: 3 }, { lunge: 500, stages: [{ at: 0 }, { at: 3, dmg: 2 }], active: 7 }] } } }, 'katana', 'light_s', cbase, 0, 2);
+eq('per-weapon combo override (lunge + stages)', [cc.lunge, cc.stageCount, cc.combo], [500, 2, 2]);
+const cc2 = applyMoves({ moves: { katana: { combo: [{ dmg: 3 }, {}] } } }, 'katana', 'light_s', cbase, 0, 1);
+eq('hit 2 override', cc2.damage, 30);
+eq('stageAtFrame knows the combo', (() => { const ch = { moves: { katana: { combo: [{}, { stages: [{ at: 0 }, { at: 3 }], active: 7 }] } } }; const a = applyMoves(ch, 'katana', 'light_n', cbase, 0, 2); return [ctx.stageAtFrame(a, ch, 'katana', 'light_n', 2, 2), ctx.stageAtFrame(a, ch, 'katana', 'light_n', 4, 2)]; })(), [0, 1]);
+
 if (fails) { console.log('\n' + fails + ' failed'); process.exit(1); }
 console.log('\nall moves tests passed');

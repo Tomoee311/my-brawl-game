@@ -420,3 +420,19 @@ STYLES_VETS = {
         },
     },
 }
+
+
+# light combo poses: hit 2 = 'combo2', hit 3 (finisher) = 'combo3'
+COMBO_VETS = {
+    'zayar': {'katana': {'combo2': dict(wind=-35, x_s=7, lean_s=12, after=12), 'combo3': dict(wind=150, x_w=-9, crouch_w=5, lean_w=-14, x_s=18, lean_s=20, after=10, two=False)},
+              'gun': {'combo2': dict(wind=18, x_s=1, after=10), 'combo3': dict(wind=48, lean_s=-6, x_s=-2, x_r=-4)}},
+    'sandar': {'katana': {'combo2': dict(wind=-70, x_s=6, lean_s=14, after=60), 'combo3': dict(wind=160, after=160, spin_s=22, x_s=2, y_s=-3, lean_s=8, two=True)},
+               'spear': {'combo2': dict(wind=30, x_s=8), 'combo3': dict(wind=40, x_w=-6, lean_w=-10, x_s=12, lean_s=14, crouch_s=3, after=20)}},
+    'weikza': {'spear': {'combo2': dict(wind=26, x_s=5, lean_s=8, after=22), 'combo3': dict(wind=55, lean_w=-12, crouch_w=4, x_s=3, after=40, y_s=-3, two=True)},
+               'gun': {'combo2': dict(wind=14, x_s=0, after=10), 'combo3': dict(wind=36, lean_s=-8, x_s=-3, crouch_s=3, two=True, x_r=-4)}},
+    'sithu': {'sword': {'combo2': dict(wind=-45, after=30, crouch_s=2, x_s=5), 'combo3': dict(wind=60, x_w=-6, crouch_w=5, lean_w=-10, x_s=15, lean_s=20, crouch_s=3, two=True, after=20)},
+              'axe': {'combo2': dict(wind=-50, after=30, crouch_s=2, x_s=5), 'combo3': dict(wind=70, x_w=-6, crouch_w=6, lean_w=-10, x_s=14, lean_s=20, crouch_s=3, two=True, after=22)}},
+    'thura': {'sword': {'combo2': dict(wind=-30, x_s=7, lean_s=12, after=12), 'combo3': dict(a_s=-62, wind=-90, crouch_w=6, lean_w=-10, y_s=-5, lean_s=6, after=-20, x_s=5, two=False)},
+              'spear': {'combo2': dict(wind=130, after=130, spin_s=-18, x_s=0), 'combo3': dict(wind=50, x_s=14, lean_s=14)}},
+    'padamya': {'chakram': {'combo2': dict(wind=-40, after=30, y_s=-3, x_s=4, two=False), 'combo3': dict(wind=75, after=70, y_s=-5, x_s=10, lean_s=12, spin_s=-14, two=False)}},
+}
