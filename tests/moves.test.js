@@ -4,8 +4,9 @@ const vm = require('vm');
 const path = require('path');
 const ctx = {};
 vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'moves.js'), 'utf8') + '\nthis.applyMoves = applyMoves; this.stageAtFrame = stageAtFrame; this.moveKeyChain = moveKeyChain;', ctx);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'moves.js'), 'utf8') + '\nthis.applyMoves = applyMoves; this.stageAtFrame = stageAtFrame; this.moveKeyChain = moveKeyChain; this.slowAttack = slowAttack; this.ATTACK_SLOWDOWN = ATTACK_SLOWDOWN;', ctx);
 const { applyMoves, stageAtFrame, moveKeyChain } = ctx;
+const { slowAttack, ATTACK_SLOWDOWN } = ctx;
 
 let fails = 0;
 const eq = (name, a, b) => { if (JSON.stringify(a) !== JSON.stringify(b)) { fails++; console.log('FAIL', name, 'got', JSON.stringify(a), 'expected', JSON.stringify(b)); } else console.log('ok  ', name); };
@@ -76,6 +77,16 @@ eq('per-weapon combo override (lunge + stages)', [cc.lunge, cc.stageCount, cc.co
 const cc2 = applyMoves({ moves: { katana: { combo: [{ dmg: 3 }, {}] } } }, 'katana', 'light_s', cbase, 0, 1);
 eq('hit 2 override', cc2.damage, 30);
 eq('stageAtFrame knows the combo', (() => { const ch = { moves: { katana: { combo: [{}, { stages: [{ at: 0 }, { at: 3 }], active: 7 }] } } }; const a = applyMoves(ch, 'katana', 'light_n', cbase, 0, 2); return [ctx.stageAtFrame(a, ch, 'katana', 'light_n', 2, 2), ctx.stageAtFrame(a, ch, 'katana', 'light_n', 4, 2)]; })(), [0, 1]);
+
+// global attack speed
+const sl = slowAttack(Object.assign({}, base, { kind: 'light' }));
+eq('light attacks are slower (startup x1.5, recovery x1.5)', [sl.startup, sl.recovery], [9, 18]);
+eq('active frames and damage are unchanged', [sl.active, sl.damage], [4, 10]);
+const sh = slowAttack(Object.assign({}, heavyBase, { kind: 'heavy' }));
+eq('heavy attacks are slowed less (x1.25)', [sh.startup, sh.recovery], [18, 15]);
+const shared = Object.assign({}, base, { kind: 'light' });
+eq('slowAttack returns the same copy every time (cached)', slowAttack(shared) === slowAttack(shared), true);
+eq('slowAttack does not change the original', [shared.startup, shared.recovery], [6, 12]);
 
 if (fails) { console.log('\n' + fails + ' failed'); process.exit(1); }
 console.log('\nall moves tests passed');

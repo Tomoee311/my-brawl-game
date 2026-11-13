@@ -46,6 +46,16 @@ heavy down = a dive / ground pound (`dive`); heavy neutral = the fighter's signa
 - **Gravity cancel** - hitting an enemy in the air freezes your fall for a moment (once per airtime) so you can follow up.
 - **3-hit light combo** - press neutral / side light again quickly: hit 1, hit 2, then a strong finisher. Defaults in `moves.js` (`COMBO_DEFAULT`), per fighter `combo: [hit2, hit3]` in `characters.js`.
 
+**Game feel knobs** (all at the top of `game.js` / `moves.js`)
+
+| Constant | What it does | Now |
+|---|---|---|
+| `ATTACK_SLOWDOWN` (`moves.js`) | startup + recovery multiplier of every attack: `light` / `heavy` (bigger = slower) | 1.5 / 1.25 |
+| `LIGHT_MIN_CYCLE`, `COMBO_MIN_CYCLE`, `COMBO_FINISH_CYCLE` | shortest time between light attacks / combo hits / after the finisher (frames) | 38 / 22 / 46 |
+| `GRAVITY_SCALE` | falling speed (1 = old, smaller = floatier). Jump height stays the same | 0.8 |
+| `FAST_FALL_SPEED` | speed when holding down while falling | 620 |
+| `DIVE_SCALE` | multiplier for dive attacks (heavy down in the air) | 0.85 |
+
 Run all checks: `node tests/load.test.js`, `moves.test.js`, `ledge.test.js`, `fighters.test.js`, `effects.test.js`, `net.test.js`, `peer-flow.test.js`.
 
 ## Controls (default - all rebindable in Lobby > Settings, keyboard and mouse)

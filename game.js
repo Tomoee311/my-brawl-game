@@ -206,15 +206,19 @@ const AIR_DASHES_MAX = 3;
 // ---------- Light attack anti-spam ----------
 // A light attack can never be repeated faster than this many frames (startup + active + recovery + cooldown). 60 frames = 1 second.
 // Fast weapons (katana) get extra cooldown so they can't be mashed.
-const LIGHT_MIN_CYCLE = 32;
+const LIGHT_MIN_CYCLE = 38;
 
 // ---------- Brawlhalla-style movement ----------
-const FAST_FALL_SPEED = 680;        // hold down while falling (kept below ~720 px/s: faster could tunnel through a platform)
+const FAST_FALL_SPEED = 620;        // hold down while falling (kept below ~720 px/s: faster could tunnel through a platform)
+// Falling: GRAVITY_SCALE < 1 = floatier, slower falling. Jump speeds are scaled by its square root so jump HEIGHT stays the same.
+const GRAVITY_SCALE = 0.8;
+const JUMP_SCALE = Math.sqrt(GRAVITY_SCALE);
+const DIVE_SCALE = 0.85;            // dive attacks (heavy down in the air) fall a little slower too
 const GRAVITY_CANCEL_FRAMES = 12;   // an air hit freezes your fall for this long (once per airtime - land to get it back)
-const COMBO_WINDOW = 30;            // frames after a light attack in which pressing light again continues the 3-hit combo
-const COMBO_MIN_CYCLE = 17;         // combo hits 2 and 3 follow up faster than a fresh light attack (LIGHT_MIN_CYCLE)
-const COMBO_FINISH_CYCLE = 40;      // ...but after the finisher you wait a bit
-const COMBO_BUFFER = 12;            // a light press this early before the next hit is remembered
+const COMBO_WINDOW = 34;            // frames after a light attack in which pressing light again continues the 3-hit combo
+const COMBO_MIN_CYCLE = 22;         // combo hits 2 and 3 follow up faster than a fresh light attack (LIGHT_MIN_CYCLE)
+const COMBO_FINISH_CYCLE = 46;      // ...but after the finisher you wait a bit
+const COMBO_BUFFER = 14;            // a light press this early before the next hit is remembered
 
 // ---------- Knockback / Hitstun ----------
 // Knockback force is calculated with this formula:
@@ -294,6 +298,7 @@ const AttackRouter = {
     // light combo: the running neutral / side light may be hit 2 or 3 of the chain (moves.js COMBO_DEFAULT + per-fighter `combo`)
     const combo = (p && p.attack && p.attack.type === type && p.attack.state !== 'none') ? (p.attack.combo | 0) : 0;
     if (p && p.char && typeof applyMoves === 'function') atk = applyMoves(p.char, weaponId, type, atk, stage, combo);
+    if (typeof slowAttack === 'function') atk = slowAttack(atk);   // global attack speed (moves.js ATTACK_SLOWDOWN)
     const stats = p && p.char && p.char.stats;
     if (!stats) return atk;
 
@@ -353,7 +358,7 @@ const config = {
   },
   physics: {
     default: 'arcade',
-    arcade: { gravity: { y: 1200 }, debug: false },
+    arcade: { gravity: { y: 1200 * GRAVITY_SCALE }, debug: false },
   },
   scene: [
     {
@@ -901,7 +906,7 @@ function makePlayer(scene, x, y, char, keys, useMouse) {
   sprite.setOffset((fw - (char.bodyW || 40)) / 2, fh - (char.bodyH || 60));
 
   const stats = char.stats || {};
-  if (stats.gravityBonus) sprite.body.setGravityY(stats.gravityBonus);
+  if (stats.gravityBonus) sprite.body.setGravityY(stats.gravityBonus * GRAVITY_SCALE);
   const visual = scene.add.graphics().setDepth(6);
   // If a real art sheet loaded, use the skin sprite (the physics sprite is invisible and only provides the body).
   // origin = bottom of the feet, so squash/stretch keeps the feet planted on the ground
@@ -946,7 +951,7 @@ function makePlayer(scene, x, y, char, keys, useMouse) {
     weaponPool: [...(char.weaponPool || ['sword', 'gun'])],
     // Movement feel stats per character
     moveSpeed: stats.moveSpeed || MOVE_SPEED,
-    jumpSpeed: stats.jumpSpeed || JUMP_SPEED,
+    jumpSpeed: (stats.jumpSpeed || JUMP_SPEED) * JUMP_SCALE,
     airControl: stats.airControl || 1,
     weight: stats.weight || 1.0,
   };
@@ -1502,7 +1507,7 @@ function applyAttackMotion(p, a, atk) {
     if (bx) p.sprite.setVelocityX(p.facing * (a.back ? -1 : 1) * bx);
   }
   if (a.diving) {
-    p.sprite.setVelocityY(Math.max(body.velocity.y, atk.dive));
+    p.sprite.setVelocityY(Math.max(body.velocity.y, atk.dive * DIVE_SCALE));
     p.sprite.setVelocityX(atk.diag ? p.facing * (a.back ? -1 : 1) * 260 : body.velocity.x * 0.7);   // a diagonal dive travels toward the held side
   }
 }

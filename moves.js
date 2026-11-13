@@ -82,6 +82,23 @@ function mergeMove(atk, o) {
   return out;
 }
 
+// Global attack speed. Startup and recovery frames are multiplied (1 = the raw weapon table numbers, bigger = slower, easier to react to).
+// The active frames (how long the hitbox is out) are not changed.
+const ATTACK_SLOWDOWN = { light: 1.5, heavy: 1.25 };
+const _slowCache = (typeof WeakMap !== 'undefined') ? new WeakMap() : null;
+
+function slowAttack(atk) {
+  if (!atk) return atk;
+  const k = ATTACK_SLOWDOWN[atk.kind === 'heavy' ? 'heavy' : 'light'];
+  if (!k || k === 1) return atk;
+  let s = _slowCache && _slowCache.get(atk);
+  if (!s) {
+    s = Object.assign({}, atk, { startup: Math.max(2, Math.round(atk.startup * k)), recovery: Math.max(3, Math.round(atk.recovery * k)) });
+    if (_slowCache) _slowCache.set(atk, s);
+  }
+  return s;
+}
+
 // 3-hit light combo (Brawlhalla style): neutral / side light pressed again in time = hit 2, then hit 3 (the finisher).
 // Defaults for every fighter; a fighter can change them per weapon with  moves: { katana: { combo: [ {hit 2 overrides}, {hit 3 overrides} ] } }
 const COMBO_DEFAULT = [
